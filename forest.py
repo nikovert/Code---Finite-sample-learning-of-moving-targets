@@ -5,10 +5,11 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 class Forest:
     # Parameters for propagation
-    wind_direction = pi * 5/8
-    wind_strength = 0.5
-    base_prop = 0.1
-    p = np.clip(base_prop + wind_strength * np.cos(wind_direction - pi/8 * np.array([[3.,  2, 1], [4.,  2.,  0], [5,  6,  7]])), 0, 1) # Propagation prob
+    wind_direction = 2*pi * 0
+    wind_strength = 0.2
+    base_prop = 0.5
+    p_rotation = np.array([[0.7*sin(wind_direction) - 0.7*cos(wind_direction), sin(wind_direction), 0.7*sin(wind_direction) + 0.7*cos(wind_direction)], [-cos(wind_direction), 1, cos(wind_direction)], [-0.7*sin(wind_direction) - 0.7*cos(wind_direction), -sin(wind_direction), -0.7*sin(wind_direction) + 0.7*cos(wind_direction)]])
+    p = np.clip(base_prop + wind_strength * p_rotation, 0, 1) # Propagation prob
     
     # Colours for potting
     fire_colour = [0.87,0.3,0.2,0.9]
@@ -28,7 +29,8 @@ class Forest:
             for x in range(l):
                 self.forest[y,x] = 3*(random.random() <= d)
         self.im = plt.imshow(self.forest, cmap=self.CM, interpolation='none')
-        plt.show()
+        plt.show(block=False)
+
     def basic_fire_prop(self):
         if 2 not in self.forest:
             return
