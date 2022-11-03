@@ -12,7 +12,11 @@ fig1 = plt.figure(figsize=(5,5))
 my_forest = Forest(100, 0.6)
 
 # initilaise a fire
-my_forest.forest[50, 60] = 2
+my_forest.forest[50:55, 60:65] = 2
+# Let the fire propagate a little
+for i in range(200):
+    my_forest.updatefig()
+plt.show(block=False)
 plt.pause(0.001)
 
 sample_count = 400
@@ -47,9 +51,9 @@ plt.gca().add_patch(Rectangle((x_min,y_min),model.width[1],model.width[0],
                     facecolor='none',
                     lw=1))
 
-# anim = animation.FuncAnimation(fig1, my_forest.updatefig, interval=10, blit=True)
-# anim.save('animation.mp4', fps=20, writer="ffmpeg", codec="libx264")
-# plt.axis('off')
+anim = animation.FuncAnimation(fig1, my_forest.updatefig, interval=10, blit=True)
+anim.save('animation.mp4', fps=20, writer="ffmpeg", codec="libx264")
+plt.axis('off')
 plt.show()
 
 

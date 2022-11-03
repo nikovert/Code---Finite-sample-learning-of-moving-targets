@@ -7,8 +7,8 @@ from mip import Model, minimize, xsum, BINARY, CONTINUOUS
 class Forest:
     # Parameters for propagation
     wind_direction = 2*pi * 0
-    wind_strength = 0.2
-    base_prop = 0.5
+    wind_strength = 0.01
+    base_prop = 0.001
     p_rotation = np.array([[0.7*sin(wind_direction) - 0.7*cos(wind_direction), sin(wind_direction), 0.7*sin(wind_direction) + 0.7*cos(wind_direction)], [-cos(wind_direction), 1, cos(wind_direction)], [-0.7*sin(wind_direction) - 0.7*cos(wind_direction), -sin(wind_direction), -0.7*sin(wind_direction) + 0.7*cos(wind_direction)]])
     p = np.clip(base_prop + wind_strength * p_rotation, 0, 1) # Propagation prob
     
@@ -40,6 +40,7 @@ class Forest:
         if 2 not in self.forest:
             return
         forest_size = self.forest.shape
+        forest_change = np.zeros(forest_size, dtype=bool)
 
         fire_row, fire_col = np.where(self.forest == 2)
         burnt_row, burnt_col = np.where(self.forest == 1)
@@ -48,19 +49,26 @@ class Forest:
 
         for i in range(fire_count):
             if fire_row[i] in [0, 1, forest_size[0]-1, forest_size[0]] or fire_col[i] in [0, 1, forest_size[1]-1, forest_size[1]]:
-                p_tmp = self.base_prop # ignore wind
+                change = (random.random() <= self.base_prop) # ignore wind
             else:
-                p_tmp = self.p  
-            self.forest[max(int(fire_row[i])-1,0):min(int(fire_row[i])+2,forest_size[0]), max(int(fire_col[i])-1,0):min(int(fire_col[i])+2,forest_size[1])] -= (random.random() <= p_tmp) 
+                change = (np.random.rand(self.p.shape[0], self.p.shape[1]) <= self.p)
+            # Catch fire with probability less than self.p
+            forest_change[max(int(fire_row[i])-1,0):min(int(fire_row[i])+2,forest_size[0]), max(int(fire_col[i])-1,0):min(int(fire_col[i])+2,forest_size[1])] += change
     
+        forest_change[burnt_row, burnt_col] = False # Always stay burnt
+        forest_change[fire_row, fire_col] = np.random.rand(len(fire_row),) <= self.base_prop # Fire goes out with prob less than base_prop
+        self.forest -= forest_change
         fire_count = np.count_nonzero(self.forest == 2)
         burnt_count = np.count_nonzero(self.forest == 1)
         print('fire count: ' + str(fire_count))
         print('burnt count: ' + str(burnt_count))
 
-        for i in range(len(burnt_row)):
-            self.forest[burnt_row[i]][burnt_col[i]] = 1
-        self.forest = np.clip(self.forest,0,3)
+        # for i in range(len(burnt_row)):
+        #     self.forest[burnt_row[i]][burnt_col[i]] = 1
+        # for i in range(len(fire_row)):
+        #     if (random.random() >= self.base_prop): # Keep Burning
+        #         self.forest[fire_row[i]][fire_col[i]] = 2    
+        #self.forest = np.clip(self.forest,0,3)
 
     def genSamples(self, m=1):
         # Assuming forest.shape[0] = forest.shape[1]
@@ -69,7 +77,7 @@ class Forest:
         for i in range(m):
             self.basic_fire_prop()
             # Burnt or on fire land
-            f[i] = (self.forest[x[i, 0], x[i,1]] == 2 or self.forest[x[i, 0], x[i,1]] == 1)
+            f[i] = self.forest[x[i, 0], x[i,1]] == 2
         return (x, f)
 
 
