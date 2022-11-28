@@ -2,15 +2,15 @@ from math import*
 import numpy as np
 import random
 import matplotlib as mpl
-import matplotlib.pyplot as plt
 from mip import Model, minimize, xsum, BINARY, CONTINUOUS
 class Forest:
     # Parameters for propagation
     wind_direction = 2*pi * 0
-    wind_strength = 0.01
+    wind_strength = 0.001
     base_prop = 0.001
+    p_burnout = 0.00001
     p_rotation = np.array([[0.7*sin(wind_direction) - 0.7*cos(wind_direction), sin(wind_direction), 0.7*sin(wind_direction) + 0.7*cos(wind_direction)], [-cos(wind_direction), 1, cos(wind_direction)], [-0.7*sin(wind_direction) - 0.7*cos(wind_direction), -sin(wind_direction), -0.7*sin(wind_direction) + 0.7*cos(wind_direction)]])
-    p = np.clip(base_prop + wind_strength * p_rotation, 0, 1) # Propagation prob
+    p = base_prop + np.clip(wind_strength * p_rotation, 0, 1-base_prop) # Propagation prob
     
     # Colours for potting
     fire_colour = [0.87,0.3,0.2,0.9]    # forest == 2
@@ -29,12 +29,6 @@ class Forest:
         for y in range(w):
             for x in range(w):
                 self.forest[y,x] = 3*(random.random() <= d)
-        self.im = plt.imshow(self.forest, cmap=self.CM, interpolation='none')
-        plt.show(block=False)
-
-    def update_plt(self):
-        self.im.set_array(self.forest)
-        plt.show(block=False)
 
     def basic_fire_prop(self):
         if 2 not in self.forest:
@@ -56,7 +50,7 @@ class Forest:
             forest_change[max(int(fire_row[i])-1,0):min(int(fire_row[i])+2,forest_size[0]), max(int(fire_col[i])-1,0):min(int(fire_col[i])+2,forest_size[1])] += change
     
         forest_change[burnt_row, burnt_col] = False # Always stay burnt
-        forest_change[fire_row, fire_col] = np.random.rand(len(fire_row),) <= self.base_prop # Fire goes out with prob less than base_prop
+        forest_change[fire_row, fire_col] = np.random.rand(len(fire_row),) <= self.p_burnout # Fire goes out with prob less than base_prop
         self.forest -= forest_change
         fire_count = np.count_nonzero(self.forest == 2)
         burnt_count = np.count_nonzero(self.forest == 1)
@@ -159,7 +153,7 @@ class Forest:
 
         return model
 
-    def updatefig(self, *args):
+    def updatefig(self, frame):
         self.basic_fire_prop()
         self.im.set_array(self.forest)
-        return self.im,
+        return self.im # Return value only used if blit=True
