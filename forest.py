@@ -8,7 +8,7 @@ class Forest:
     wind_direction = 2*pi * 0
     wind_strength = 0.001
     base_prop = 0.001
-    p_burnout = 0.00001
+    p_burnout = 0.000001
     p_rotation = np.array([[0.7*sin(wind_direction) - 0.7*cos(wind_direction), sin(wind_direction), 0.7*sin(wind_direction) + 0.7*cos(wind_direction)], [-cos(wind_direction), 1, cos(wind_direction)], [-0.7*sin(wind_direction) - 0.7*cos(wind_direction), -sin(wind_direction), -0.7*sin(wind_direction) + 0.7*cos(wind_direction)]])
     p = base_prop + np.clip(wind_strength * p_rotation, 0, 1-base_prop) # Propagation prob
     
@@ -18,28 +18,42 @@ class Forest:
     ground_colour = [0.29,0.01,0,0.6]   # forest == 0
     burnt_colour = [0.1,0.1,0.1,1]      # forest == 1
     CM = mpl.colors.ListedColormap([ground_colour,burnt_colour,fire_colour, tree_colour])
-    
+    save_forest = False # save copies of the forest when propogating the fire.
 
-    def __init__(self,w,d):
+    def __init__(self,w,d, save_forest=False):
         # Create a simple forest
         #    w - width for a square forest
         #    d - forest denisty
-        self.forest = np.zeros((w,w))
+        self._forest = np.zeros((w,w))
         self.forest_width = w
         for y in range(w):
             for x in range(w):
-                self.forest[y,x] = 3*(random.random() <= d)
+                self._forest[y,x] = 3*(random.random() <= d)
+        self.t = 0 # current time stamp
+
+        # initialize a fire
+        start_x = random.randint(5, w-5)
+        start_y = random.randint(5, w-5)
+        self._forest[start_x-1:start_x+1, start_y-1:start_y+1] = 2
+        self._burn_time = np.zeros((w,w))
+        if save_forest:
+            self.save_forest = save_forest
+            self.forest_change = []
+
+    @property
+    def forest(self):
+        return self._forest
 
     def basic_fire_prop(self):
-        if 2 not in self.forest:
+        if 2 not in self._forest:
             return
-        forest_size = self.forest.shape
+        forest_size = self._forest.shape
         forest_change = np.zeros(forest_size, dtype=bool)
 
-        fire_row, fire_col = np.where(self.forest == 2)
-        burnt_row, burnt_col = np.where(self.forest == 1)
+        fire_row, fire_col = np.where(self._forest == 2)
+        burnt_row, burnt_col = np.where(self._forest == 1)
 
-        fire_count = np.count_nonzero(self.forest == 2)
+        fire_count = np.count_nonzero(self._forest == 2)
 
         for i in range(fire_count):
             if fire_row[i] in [0, 1, forest_size[0]-1, forest_size[0]] or fire_col[i] in [0, 1, forest_size[1]-1, forest_size[1]]:
@@ -50,19 +64,27 @@ class Forest:
             forest_change[max(int(fire_row[i])-1,0):min(int(fire_row[i])+2,forest_size[0]), max(int(fire_col[i])-1,0):min(int(fire_col[i])+2,forest_size[1])] += change
     
         forest_change[burnt_row, burnt_col] = False # Always stay burnt
-        forest_change[fire_row, fire_col] = np.random.rand(len(fire_row),) <= self.p_burnout # Fire goes out with prob less than base_prop
-        self.forest -= forest_change
-        fire_count = np.count_nonzero(self.forest == 2)
-        burnt_count = np.count_nonzero(self.forest == 1)
-        print('fire count: ' + str(fire_count))
-        print('burnt count: ' + str(burnt_count))
+        forest_change[fire_row, fire_col] = np.random.rand(len(fire_row),)**((1+self._burn_time[fire_row, fire_col])**(-100)) <= self.p_burnout # Fire goes out with prob less than base_prop
+        
+        self.t += 1
+        self._forest -= forest_change
+        if self.save_forest:
+            self.forest_change.append(forest_change)
+
+        self._burn_time[fire_row, fire_col] += 1
+            
+        fire_count = np.count_nonzero(self._forest == 2)
+        burnt_count = np.count_nonzero(self._forest == 1)
+        if self.t % 1000 == 0:
+            print('fire count: ' + str(fire_count))
+            print('burnt count: ' + str(burnt_count))
 
         # for i in range(len(burnt_row)):
-        #     self.forest[burnt_row[i]][burnt_col[i]] = 1
+        #     self._forest[burnt_row[i]][burnt_col[i]] = 1
         # for i in range(len(fire_row)):
         #     if (random.random() >= self.base_prop): # Keep Burning
-        #         self.forest[fire_row[i]][fire_col[i]] = 2    
-        #self.forest = np.clip(self.forest,0,3)
+        #         self._forest[fire_row[i]][fire_col[i]] = 2    
+        #self._forest = np.clip(self._forest,0,3)
 
     def genSamples(self, m=1):
         # Assuming forest.shape[0] = forest.shape[1]
@@ -71,7 +93,7 @@ class Forest:
         for i in range(m):
             self.basic_fire_prop()
             # Burnt or on fire land
-            f[i] = self.forest[x[i, 0], x[i,1]] == 2
+            f[i] = self._forest[x[i, 0], x[i,1]] == 2
         return (x, f)
 
 
@@ -155,5 +177,5 @@ class Forest:
 
     def updatefig(self, frame):
         self.basic_fire_prop()
-        self.im.set_array(self.forest)
+        self.im.set_array(self._forest)
         return self.im # Return value only used if blit=True
