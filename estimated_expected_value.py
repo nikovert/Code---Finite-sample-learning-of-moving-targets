@@ -16,15 +16,21 @@ delta = 10**-4
 d = 4
 k = 1
 eps = 0.25
-a_high = 0.017
-a_low  = 0.016
+a_high = 0.013
+a_low  = 0.010
 map_size = 100
 stay_marked = False
 
-delta_ratio = np.array([x / 100.0 for x in range(1, 100)])
-sample_count_range = np.maximum(5*(4*a_high + eps)/eps**2 * (-np.log((delta_ratio*delta)/4) + d* 40*(4*a_high + eps)/eps**2), -3*k/a_low * np.log(((1-delta_ratio)*delta)))
-sample_count = int(min(sample_count_range))
+alpha = np.outer(np.linspace(0.001, 1-0.001, 100), np.ones(100))
+delta_ratio = alpha.copy().T
+alpha, delta_ratio = np.meshgrid(np.linspace(0.001, 1-0.001, 100), np.linspace(0.001, 1-0.001, 100))
+
+sample_count_range = np.maximum(5*(2*(1+alpha)*a_high + eps)/eps**2 * (-np.log((delta_ratio*delta)/4) + d* 40*(2*(1+alpha)*a_high + eps)/eps**2), -3*k/(alpha**2 * a_low) * np.log(((1-delta_ratio)*delta)))
+sample_count = int(np.min(sample_count_range))
+ind = np.unravel_index(np.argmin(sample_count_range, axis=None), sample_count_range.shape)
 print("Starting with %d samples" % sample_count)
+print("minimum alpha: %f" % alpha[ind])
+print("minimum delta_ratio: %f" % delta_ratio[ind])
 
 rounds = 1000
 global_a_high = 0
@@ -52,10 +58,9 @@ for iter in range(rounds):
         global_a_low  = min(global_a_low, a_low)
         global_mu[iter] = max(global_mu[iter],mu)
         # Calculate the number of samples needed
-        delta_ratio = np.array([x / 100.0 for x in range(1, 100)])
-        sample_count_range = np.maximum(5*(4*global_a_high + eps)/eps**2 * (-np.log((delta_ratio*delta)/4) + d* 40*(4*global_a_high + eps)/eps**2), -3*k/global_a_low * np.log(((1-delta_ratio)*delta)))
-        sample_count = int(min(sample_count_range))
-    print("Estimated to need %d samples" % sample_count)
+        sample_count_range = np.maximum(5*(2*(1+alpha)*global_a_high + eps)/eps**2 * (-np.log((delta_ratio*delta)/4) + d* 40*(2*(1+alpha)*global_a_high + eps)/eps**2), -3*k/(alpha**2 * global_a_low) * np.log(((1-delta_ratio)*delta)))
+        sample_count = int(np.min(sample_count_range))
+        print("Estimated to need %d samples" % sample_count)
     
     
 print("After %d rounds the following bounds have been found"%rounds)

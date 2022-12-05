@@ -9,7 +9,6 @@ class Car:
     travel_vel = 0.1
     travel_dir = 0
 
-    car_size = 16
 
     # Colours for potting
     car_colour = [0.156,0.59,0,1]     # map == 1
@@ -25,7 +24,7 @@ class Car:
         self._map = np.zeros((w,w), dtype=bool)
         self.map_width = w
         self.t = 0 # current time stamp
-
+        self.car_size = 0.16 * self.map_width
         # initialize a car
         start_x = random.randint(5+self.car_size, w-5-self.car_size)
         start_y = random.randint(5+self.car_size, w-5-self.car_size)

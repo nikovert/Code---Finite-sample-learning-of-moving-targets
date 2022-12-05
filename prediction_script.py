@@ -23,14 +23,18 @@ eps = 0.25
 a_high = 0.013
 a_low  = 0.010
 map_size = 100
-my_car = Car(map_size, save_change = True)
+my_car = Car(map_size, save_change = False)
 my_car.stay_marked = True
 
 full_run = True
 if full_run:
-    delta_ratio = np.array([x / 100.0 for x in range(1, 100)])
-    sample_count_range = np.maximum(5*(4*a_high + eps)/eps**2 * (-np.log((delta_ratio*delta)/4) + d* 40*(4*a_high + eps)/eps**2), -3*k/a_low * np.log(((1-delta_ratio)*delta)))
-    sample_count = int(min(sample_count_range))
+    alpha = np.outer(np.linspace(0.001, 1-0.001, 100), np.ones(100))
+    delta_ratio = alpha.copy().T
+    alpha, delta_ratio = np.meshgrid(np.linspace(0.001, 1-0.001, 100), np.linspace(0.001, 1-0.001, 100))
+
+    sample_count_range = np.maximum(5*(2*(1+alpha)*a_high + eps)/eps**2 * (-np.log((delta_ratio*delta)/4) + d* 40*(2*(1+alpha)*a_high + eps)/eps**2), -3*k/(alpha**2 * a_low) * np.log(((1-delta_ratio)*delta)))
+    sample_count = int(np.min(sample_count_range))
+    ind = np.unravel_index(np.argmin(sample_count_range, axis=None), sample_count_range.shape)
 else:
     sample_count = 20000
 
