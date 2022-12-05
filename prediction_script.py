@@ -18,9 +18,9 @@ if False:
 
 delta = 10**-4
 d = 4
-k = 2   
+k = 1
 eps = 0.25
-a_high = 0.014
+a_high = 0.013
 a_low  = 0.010
 map_size = 100
 my_car = Car(map_size, save_change = True)
@@ -45,9 +45,9 @@ fig2 = plt.figure(figsize=(5,5))
 sample_array = np.zeros(my_car.map.shape)
 sample_array_min = np.zeros(my_car.map.shape)
 for i in range(sample_count):
-    sample_array[model.x[i][0], model.x[i][1]] = max(sample_array[model.x[i][0], model.x[i][1]], 1 + int(model.f[i]))
+    sample_array[round(model.x[i][0]), round(model.x[i][1])] = max(sample_array[round(model.x[i][0]), round(model.x[i][1])], 1 + int(model.f[i]))
     if model.discarded[i] < 1:
-        sample_array_min[model.x[i][0], model.x[i][1]] = max(sample_array_min[model.x[i][0], model.x[i][1]], 1 + int(model.f[i]))
+        sample_array_min[round(model.x[i][0]), round(model.x[i][1])] = max(sample_array_min[round(model.x[i][0]), round(model.x[i][1])], 1 + int(model.f[i]))
 
 # Colours for potting
 two_colour = [0.156, 1,0,1]  
@@ -81,16 +81,16 @@ plt.gca().add_patch(Rectangle((x_min,y_min),model.width[1],model.width[0],
                     edgecolor='blue',
                     facecolor='none',
                     lw=1))
-frame_count = 20
-anim = animation.FuncAnimation(fig4, my_car.updatefig, frames=range(frame_count), interval = 1)
-#anim.save('animation.mp4', fps=20, writer="ffmpeg", codec="libx264")
+car_postion_m = my_car.car_position
+travel_dir_m = my_car.travel_dir
+
+frame_count = 200
+anim = animation.FuncAnimation(fig4, my_car.updatefig, frames=frame_count, interval = 1)
+anim.save('animation.mp4', fps=30, writer="ffmpeg", codec="libx264")
 plt.axis('off')
-plt.show()
 
-
-
-filepath = 'session.pkl'
 model.write('model.lp')
-del(model)
-dump_session(filepath) # Save the session
+# del(model)
+# filepath = 'session.pkl'
+# dump_session(filepath) # Save the session
 plt.show()

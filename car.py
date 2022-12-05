@@ -27,8 +27,8 @@ class Car:
         self.t = 0 # current time stamp
 
         # initialize a car
-        start_x = random.randint(5, w-5)
-        start_y = random.randint(5, w-5)
+        start_x = random.randint(5+self.car_size, w-5-self.car_size)
+        start_y = random.randint(5+self.car_size, w-5-self.car_size)
         self.car_position = (start_x, start_y)
         s = int(self.car_size/4)
         self._map[start_x-s:start_x+s, start_y-s:start_y+s] = 1
@@ -63,22 +63,22 @@ class Car:
             self._map[round(x)-s:round(x)+s, round(y)-s:round(y)+s] = 0
 
         # If we are heading towards the North edge
-        if (y > self.map_width-self.car_size) & (self.travel_dir%(2*pi) > 0) & (self.travel_dir%(2*pi) < pi):
+        if (y > self.map_width-self.car_size/2) & (self.travel_dir%(2*pi) > 0) & (self.travel_dir%(2*pi) < pi):
                 self.travel_dir = pi
 
         # If we are heading towards the South edge
-        if (y < self.car_size) & (self.travel_dir%(2*pi) > pi) & (self.travel_dir%(2*pi) < 2*pi):
+        if (y < self.car_size/2) & (self.travel_dir%(2*pi) > pi) & (self.travel_dir%(2*pi) < 2*pi):
                 self.travel_dir = 2*pi
 
         # If we are heading towards the East edge
-        if (x > self.map_width-self.car_size) & (self.travel_dir%(2*pi) >= 0) & (self.travel_dir%(2*pi) < pi/2):
+        if (x > self.map_width-self.car_size/2) & (self.travel_dir%(2*pi) >= 0) & (self.travel_dir%(2*pi) < pi/2):
                 self.travel_dir = pi/2
 
-        if (x > self.map_width-self.car_size) & (self.travel_dir%(2*pi) > 3*pi/2) & (self.travel_dir%(2*pi) < 2*pi):
+        if (x > self.map_width-self.car_size/2) & (self.travel_dir%(2*pi) > 3*pi/2) & (self.travel_dir%(2*pi) < 2*pi):
                 self.travel_dir = pi/2
                 
         # If we are heading towards the West edge
-        if (x < self.car_size) & (self.travel_dir%(2*pi) > pi/2) & (self.travel_dir%(2*pi) < 3*pi/2):
+        if (x < self.car_size/2) & (self.travel_dir%(2*pi) > pi/2) & (self.travel_dir%(2*pi) < 3*pi/2):
                 self.travel_dir = 3*pi/2
 
         x_new, y_new = (x + self.travel_vel * cos(self.travel_dir), y + self.travel_vel * sin(self.travel_dir)) 
@@ -92,12 +92,12 @@ class Car:
 
     def genSamples(self, m=1):
         # Assuming map.shape[0] = map.shape[1]
-        x = np.random.randint(1, high=self.map_width, size=(m,2))
+        x = np.random.random(size=(m,2))*(self.map_width-1)
         f = np.zeros((m,1))
         for i in range(m):
             self.next_step()
             # Burnt or on fire land
-            f[i] = self._map[x[i, 0], x[i,1]] == 1
+            f[i] = self._map[round(x[i, 0]), round(x[i,1])] == 1
         return (x, f)
 
 
@@ -132,7 +132,6 @@ class Car:
         z = {(i,j): model.add_var(var_type=BINARY, name="z_%d,%d" % (i, j)) for i in range(m) for j in range(Nf)}
         s = {(i,j): model.add_var(var_type=CONTINUOUS, lb = 0, ub = M, name="s_%d,%d" % (i, j)) for i in range(m) for j in range(Nf)}
         
-        model.objective = minimize(xsum(v[i] for i in range(m)))
         discarded = np.zeros_like(f)
         for i in range(m):
             if f[i]: # constraints for i in I1
@@ -153,6 +152,8 @@ class Car:
             model.add_constr(-b[j] - b[j + Nf_hf] == width[j])
             model.add_constr(width[j] >= 0)
         
+        model.objective = minimize(xsum(v[i] for i in range(m)) + 0.01 * xsum(width[j] for j in range(Nf_hf)))
+
         print("Discarded %d samples." % sum(discarded))
         model.x = x
         model.f = f
