@@ -19,12 +19,21 @@ if False:
 delta = 10**-4
 d = 4
 k = 1
-eps = 0.25
-a_high = 0.013
-a_low  = 0.010
-map_size = 100
+eps = 0.19
+# For speed = 0.1
+a_high = 0.009
+a_low  = 0.001
+# For speed = 0.01
+a_high = 0.002096
+a_low = 0.000505
+
+# Estimated to need 52342 samples
+# Discarded 51960 samples.
+# Model reduced to using 382 samples.
+
+map_size = 250
 my_car = Car(map_size, save_change = False)
-my_car.stay_marked = True
+my_car.stay_marked = False
 
 full_run = True
 if full_run:
@@ -54,9 +63,9 @@ for i in range(sample_count):
         sample_array_min[round(model.x[i][0]), round(model.x[i][1])] = max(sample_array_min[round(model.x[i][0]), round(model.x[i][1])], 1 + int(model.f[i]))
 
 # Colours for potting
-two_colour = [0.156, 1,0,1]  
-one_colour = [1,0.01,0,0.6] 
-zero_colour = [1 ,1 , 1 ,1]  
+two_colour = my_car.car_colour  
+one_colour = my_car.ground_colour 
+zero_colour = "gold" 
 CM = mpl.colors.ListedColormap([zero_colour,one_colour,two_colour])
 plt.imshow(sample_array, cmap=CM, interpolation='none')
 plt.show(block=False)
@@ -75,9 +84,15 @@ elif status == OptimizationStatus.NO_SOLUTION_FOUND:
     print('no feasible solution found, lower bound is: {} '.format(model.objective_bound))
     plt.show(block=True)
 
+
+car_postion_m = my_car.car_position
+travel_dir_m = my_car.travel_dir
+
 fig4 = plt.figure(figsize=(5,5))
 my_car.reset_map()
 my_car.stay_marked = False # only show current position of target
+
+my_car.next_step() # t = m+1
 my_car.im = plt.imshow(my_car.map, cmap=my_car.CM, interpolation='none')
 y_min = min(abs(model.b[0].x), abs(model.b[2].x))
 x_min = min(abs(model.b[1].x), abs(model.b[3].x))
@@ -85,11 +100,22 @@ plt.gca().add_patch(Rectangle((x_min,y_min),model.width[1],model.width[0],
                     edgecolor='blue',
                     facecolor='none',
                     lw=1))
-car_postion_m = my_car.car_position
-travel_dir_m = my_car.travel_dir
+
+fig5 = plt.figure(figsize=(5,5))
+my_car.reset_map()
+my_car.stay_marked = False # only show current position of target
+
+my_car.next_step()
+my_car.im = plt.imshow(my_car.map, cmap=my_car.CM, interpolation='none')
+y_min = min(abs(model.b[0].x), abs(model.b[2].x))
+x_min = min(abs(model.b[1].x), abs(model.b[3].x))
+plt.gca().add_patch(Rectangle((x_min,y_min),model.width[1],model.width[0],
+                    edgecolor='blue',
+                    facecolor='none',
+                    lw=1))
 
 frame_count = 200
-anim = animation.FuncAnimation(fig4, my_car.updatefig, frames=frame_count, interval = 1)
+anim = animation.FuncAnimation(fig5, my_car.updatefig, frames=frame_count, interval = 1)
 anim.save('animation.mp4', fps=30, writer="ffmpeg", codec="libx264")
 plt.axis('off')
 

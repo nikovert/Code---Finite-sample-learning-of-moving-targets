@@ -15,10 +15,10 @@ import time
 delta = 10**-4
 d = 4
 k = 1
-eps = 0.25
-a_high = 0.013
-a_low  = 0.010
-map_size = 100
+eps = 0.19
+a_high =  0.001336
+a_low  = 0.000529
+map_size = 250
 stay_marked = False
 
 alpha = np.outer(np.linspace(0.001, 1-0.001, 100), np.ones(100))
@@ -32,12 +32,12 @@ print("Starting with %d samples" % sample_count)
 print("minimum alpha: %f" % alpha[ind])
 print("minimum delta_ratio: %f" % delta_ratio[ind])
 
-rounds = 1000
+rounds = 100
 global_a_high = 0
 global_a_low = 1
 global_mu = np.zeros(rounds)
 for iter in range(rounds):
-    print("Starting round with %d" % iter)
+    print("Starting round %d" % iter)
     m = sample_count-2
     while sample_count > int(m+1):
         # Generate initial Map

@@ -6,13 +6,13 @@ from mip import Model, minimize, xsum, BINARY, CONTINUOUS
 import copy as cp
 class Car:
     # Parameters for propagation
-    travel_vel = 0.1
+    travel_vel = 0.01
     travel_dir = 0
 
 
     # Colours for potting
-    car_colour = [0.156,0.59,0,1]     # map == 1
-    ground_colour = [0.29,0.01,0,0.6]   # map == 0
+    car_colour = "k"    # map == 1
+    ground_colour = "green"   # map == 0
     CM = mpl.colors.ListedColormap([ground_colour,car_colour])
     save_change = False # save copies of the map change
 
@@ -130,7 +130,7 @@ class Car:
         b = {j: model.add_var(var_type=CONTINUOUS, lb = -M, ub = M, name="b_%d" % j) for j in range(Nf)}
         z = {(i,j): model.add_var(var_type=BINARY, name="z_%d,%d" % (i, j)) for i in range(m) for j in range(Nf)}
         s = {(i,j): model.add_var(var_type=CONTINUOUS, lb = 0, ub = M, name="s_%d,%d" % (i, j)) for i in range(m) for j in range(Nf)}
-        
+
         discarded = np.zeros_like(f)
         for i in range(m):
             if f[i]: # constraints for i in I1
@@ -151,7 +151,7 @@ class Car:
             model.add_constr(-b[j] - b[j + Nf_hf] == width[j])
             model.add_constr(width[j] >= 0)
         
-        model.objective = minimize(xsum(v[i] for i in range(m)) + 0.01 * xsum(width[j] for j in range(Nf_hf)))
+        model.objective = minimize(xsum(v[i] for i in range(m)) + 0.1 * xsum(width[j] for j in range(Nf_hf)))
 
         print("Discarded %d samples." % sum(discarded))
         model.x = x
