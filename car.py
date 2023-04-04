@@ -50,10 +50,12 @@ class Car:
         if self.save_change :
             self.map_change = []
 
-    def next_step(self):
+    def next_step(self, dt):
         if self.save_change:
             map_old= cp.copy(self._map)
-        self.travel_dir += random.random() * pi/100
+        self.travel_dir += random.random() * pi/100 * dt
+        self.travel_vel += -2 * 10**-5 * dt
+
         x, y = self.car_position
         s = int(self.car_size/4)
         if self.stay_marked:
@@ -80,21 +82,21 @@ class Car:
         if (x < self.car_size/2) & (self.travel_dir%(2*pi) > pi/2) & (self.travel_dir%(2*pi) < 3*pi/2):
                 self.travel_dir = 3*pi/2
 
-        x_new, y_new = (x + self.travel_vel * cos(self.travel_dir), y + self.travel_vel * sin(self.travel_dir)) 
+        x_new, y_new = (x + dt * self.travel_vel * cos(self.travel_dir), y + dt * self.travel_vel * sin(self.travel_dir)) 
 
         self._map[round(x_new)-s:round(x_new)+s, round(y_new)-s:round(y_new)+s] = 1
-        self.t += 1
+        self.t += dt
         self.car_position = (x_new, y_new)
 
         if self.save_change:
             self.map_archive.append(map_old) # Track the changes between subsequent steps
 
-    def genSamples(self, m=1):
+    def genSamples(self, dt, m=1):
         # Assuming map.shape[0] = map.shape[1]
         x = np.random.random(size=(m,2))*(self.map_width-1)
         f = np.zeros((m,1))
         for i in range(m):
-            self.next_step()
+            self.next_step(dt)
             # Burnt or on fire land
             f[i] = self._map[round(x[i, 0]), round(x[i,1])] == 1
         return (x, f)
@@ -169,7 +171,7 @@ class Car:
 
         return model
 
-    def updatefig(self, frame):
-        self.next_step()
+    def updatefig(self, dt, frame):
+        self.next_step(dt)
         self.im.set_array(self._map)
         return self.im # Return value only used if blit=True
