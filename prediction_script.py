@@ -4,10 +4,11 @@ import random
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib import animation
-from matplotlib.patches import Rectangle
-from car import Car
+from matplotlib.patches import Rectangle, Polygon
+from aeb import AEB
 from mip import Model, OptimizationStatus
 from dill import dump_session, load_session
+from matplotlib.transforms import Affine2D
 
 if False:
     filepath = 'session.pkl'
@@ -30,12 +31,10 @@ a_low = 0.000505
 # Estimated to need 52342 samples
 # Discarded 51960 samples.
 # Model reduced to using 382 samples.
+np.random.seed(19680801)
+simulator = AEB(save_change = False)
 
-map_size = 250
-my_car = Car(map_size, save_change = False)
-my_car.stay_marked = False
-
-full_run = True
+full_run = False
 if full_run:
     alpha = np.outer(np.linspace(0.001, 1-0.001, 100), np.ones(100))
     delta_ratio = alpha.copy().T
@@ -45,37 +44,38 @@ if full_run:
     sample_count = int(np.min(sample_count_range))
     ind = np.unravel_index(np.argmin(sample_count_range, axis=None), sample_count_range.shape)
 else:
-    sample_count = 20000
+    sample_count = 1000
 
 print("Estimated to need %d samples"%sample_count)
-model = my_car.generateMsampleModel(sample_count)
+model = simulator.generateMsampleModel(sample_count)
 #model.emphasis = 1 # FEASIBILITY
 
-fig1 = plt.figure(figsize=(5,5))
-my_car.im = plt.imshow(my_car.map, cmap=my_car.CM, interpolation='none')
+# fig1 = plt.figure(figsize=(5,5))
+# simulator.im = plt.imshow(simulator.map, cmap=simulator.CM, interpolation='none')
 
-fig2 = plt.figure(figsize=(5,5))
-sample_array = np.zeros(my_car.map.shape)
-sample_array_min = np.zeros(my_car.map.shape)
-for i in range(sample_count):
-    sample_array[round(model.x[i][0]), round(model.x[i][1])] = max(sample_array[round(model.x[i][0]), round(model.x[i][1])], 1 + int(model.f[i]))
-    if model.discarded[i] < 1:
-        sample_array_min[round(model.x[i][0]), round(model.x[i][1])] = max(sample_array_min[round(model.x[i][0]), round(model.x[i][1])], 1 + int(model.f[i]))
+# fig2 = plt.figure(figsize=(5,5))
+# sample_array = np.zeros(simulator.map.shape)
+# sample_array_min = np.zeros(simulator.map.shape)
+# for i in range(sample_count):
+#     sample_array[round(model.x[i][0]), round(model.x[i][1])] = max(sample_array[round(model.x[i][0]), round(model.x[i][1])], 1 + int(model.f[i]))
+#     if model.discarded[i] < 1:
+#         sample_array_min[round(model.x[i][0]), round(model.x[i][1])] = max(sample_array_min[round(model.x[i][0]), round(model.x[i][1])], 1 + int(model.f[i]))
 
-# Colours for potting
-two_colour = my_car.car_colour  
-one_colour = my_car.ground_colour 
-zero_colour = "gold" 
-CM = mpl.colors.ListedColormap([zero_colour,one_colour,two_colour])
-plt.imshow(sample_array, cmap=CM, interpolation='none')
-plt.show(block=False)
+# # Colours for potting
+# two_colour = simulator.car_colour  
+# one_colour = simulator.ground_colour 
+# zero_colour = "gold" 
+# CM = mpl.colors.ListedColormap([zero_colour,one_colour,two_colour])
+# plt.imshow(sample_array, cmap=CM, interpolation='none')
+# plt.show(block=False)
 
-fig3 = plt.figure(figsize=(5,5))
-plt.imshow(sample_array_min, cmap=CM, interpolation='none')
-plt.show(block=False)
+# fig3 = plt.figure(figsize=(5,5))
+# plt.imshow(sample_array_min, cmap=CM, interpolation='none')
+# plt.show(block=False)
 
-model.max_mip_gap = k
+#model.max_mip_gap = k
 status = model.optimize(max_nodes = 10)
+model.write('model.lp')
 if status == OptimizationStatus.OPTIMAL:
     print('optimal solution cost {} found'.format(model.objective_value))
 elif status == OptimizationStatus.FEASIBLE:
@@ -84,42 +84,78 @@ elif status == OptimizationStatus.NO_SOLUTION_FOUND:
     print('no feasible solution found, lower bound is: {} '.format(model.objective_bound))
     plt.show(block=True)
 
+plot_results = True
+if plot_results:
+    fig1 = plt.figure(figsize=(5,5))
+    t_samples = model.x[np.argwhere(model.f)[:, 0]]
+    f_samples = model.x[np.argwhere(model.f<1)[:, 0]]
+    plt.scatter(t_samples[:,0], t_samples[:,1], marker='^', alpha=0.3) # Plot samples with f=1
+    plt.scatter(f_samples[:,0], f_samples[:,1], marker='o', alpha=0.3) # Plot samples with f=0
+    
+    d_sampes = model.x[np.argwhere(model.discarded)[:, 0]]
+    plt.scatter(d_sampes[:,0], d_sampes[:,1], marker='o', alpha=0.3, c='k') # Plot discarded samples
+    
+    plt.xlabel('distance (m)')
+    plt.ylabel('speed (m/s)^2')
 
-car_postion_m = my_car.car_position
-travel_dir_m = my_car.travel_dir
+    simulator.next_step() # t = m+1
+    ## Find lower left corner
+    #       p4 ----- p3
+    #       |        |
+    #       |        |
+    #       p1 ----- p2
+    #
+    theta  = model.theta
+    p1 = [model.b[2].x * cos(theta)-model.b[3].x*sin(theta), model.b[2].x * sin(theta)+model.b[3].x*cos(theta)]
+    p2 = [-model.b[0].x * cos(theta)-model.b[3].x*sin(theta), -model.b[0].x * sin(theta)+model.b[3].x*cos(theta)]
+    p3 = [-model.b[0].x * cos(theta)+model.b[1].x*sin(theta), -model.b[0].x * sin(theta)-model.b[1].x*cos(theta)]
+    p4 = [model.b[2].x * cos(theta)+model.b[1].x*sin(theta), model.b[2].x * sin(theta)-model.b[1].x*cos(theta)]
 
-fig4 = plt.figure(figsize=(5,5))
-my_car.reset_map()
-my_car.stay_marked = False # only show current position of target
+    polygon = Polygon([p1, p2, p3, p4], alpha = 0.4)
+    plt.gca().add_patch(polygon)
 
-my_car.next_step() # t = m+1
-my_car.im = plt.imshow(my_car.map, cmap=my_car.CM, interpolation='none')
-y_min = min(abs(model.b[0].x), abs(model.b[2].x))
-x_min = min(abs(model.b[1].x), abs(model.b[3].x))
-plt.gca().add_patch(Rectangle((x_min,y_min),model.width[1],model.width[0],
-                    edgecolor='blue',
-                    facecolor='none',
-                    lw=1))
 
-fig5 = plt.figure(figsize=(5,5))
-my_car.reset_map()
-my_car.stay_marked = False # only show current position of target
 
-my_car.next_step()
-my_car.im = plt.imshow(my_car.map, cmap=my_car.CM, interpolation='none')
-y_min = min(abs(model.b[0].x), abs(model.b[2].x))
-x_min = min(abs(model.b[1].x), abs(model.b[3].x))
-plt.gca().add_patch(Rectangle((x_min,y_min),model.width[1],model.width[0],
-                    edgecolor='blue',
-                    facecolor='none',
-                    lw=1))
+m = len(model.f)
+max_val = -inf
+Nf = 2*len(model.x[0])
+boundary_points = []
+violation_points = []
+for i in range(m):
+    if model.f[i]: # constraints for i in I1
+        if model.v[i].x:
+            violation_points.append(model.x[i])
+            plt.scatter(model.x[i,0], model.x[i,1], c='r', marker='^')
+            continue
+        for j in range(Nf):
+            val = np.matmul(model.a[j], model.x[i]) + model.b[j].x
+            if val > -0.1:
+                max_val = max(max_val, val)
+                boundary_points.append(model.x[i])
+    elif model.v[i].x:
+        plt.scatter(model.x[i,0], model.x[i,1], c='r', marker='o')
 
-frame_count = 200
-anim = animation.FuncAnimation(fig5, my_car.updatefig, frames=frame_count, interval = 1)
-anim.save('animation.mp4', fps=30, writer="ffmpeg", codec="libx264")
-plt.axis('off')
+# for deg in range(0, 360, 45):
+#     rec = Rectangle((x_min,y_min), model.width[0].x,model.width[1].x,
+#                         edgecolor='blue',
+#                         facecolor='none',
+#                         lw=1,
+#                         angle = deg)
+#     plt.gca().add_patch(rec)
 
-model.write('model.lp')
+# fig5 = plt.figure(figsize=(5,5))
+# simulator.reset_map()
+# simulator.stay_marked = False # only show current position of target
+
+# simulator.next_step()
+# simulator.im = plt.imshow(simulator.map, cmap=simulator.CM, interpolation='none')
+# y_min = min(abs(model.b[0].x), abs(model.b[2].x))
+# x_min = min(abs(model.b[1].x), abs(model.b[3].x))
+# plt.gca().add_patch(Rectangle((x_min,y_min),model.width[1],model.width[0],
+#                     edgecolor='blue',
+#                     facecolor='none',
+#                     lw=1))
+
 # del(model)
 # filepath = 'session.pkl'
 # dump_session(filepath) # Save the session
