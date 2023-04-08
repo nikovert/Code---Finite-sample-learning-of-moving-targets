@@ -44,6 +44,17 @@ class AEB:
             f[i] = self.safety_label(l[i], vsqr[i])
         x = np.stack((l, vsqr), axis=1)
         return (x, f)
+    
+    def genSamples_nostep(self, m=1):
+        # Assuming map.shape[0] = map.shape[1]
+        l = np.random.uniform(low=self._l_min, high=self._l_max, size=m)
+        vsqr = np.minimum(np.maximum(np.random.normal(self._mu_vsqr, self._sigma_vsqr, size=m), self._vsqr_min), self._vsqr_max)
+        f = np.zeros(m)
+        for i in range(m):
+            # Generate label
+            f[i] = self.safety_label(l[i], vsqr[i])
+        x = np.stack((l, vsqr), axis=1)
+        return (x, f)
 
     def safety_label(self, l, vsqr):
         # return safety label for a distance l in m and speed v in km/h
@@ -54,13 +65,18 @@ class AEB:
         # Get samples
         (x,f) = self.genSamples(dt, m=nr_samples)
 
+        theta = -13/180 * pi # Fixed rotation angle
+        R = np.array(((np.cos(theta), np.sin(theta)), (-np.sin(theta), np.cos(theta))))
+
         if reduce:
-           target_samples =  x[np.argwhere(f)[:, 0]]
-           max_l, max_vsqr = np.max(target_samples,0)
-           min_l, min_vsqr = np.min(target_samples,0)
-        else:
-            max_l, max_vsqr = self._l_max, self._vsqr_max
-            min_l, min_vsqr = self._l_min, self._vsqr_min
+           margin = 0.0
+           t_samples =  x[np.argwhere(f)[:, 0]]
+           t_max_l, t_max_vsqr =  margin + np.max(np.matmul(R, np.transpose(t_samples)),1)
+           t_min_l, t_min_vsqr = -margin + np.min(np.matmul(R, np.transpose(t_samples)),1)
+           
+           f_samples = x[np.argwhere(f<1)[:, 0]]
+           f_max_l, f_max_vsqr =  margin + np.max(np.matmul(R, np.transpose(f_samples)),1)
+           f_min_l, f_min_vsqr = -margin + np.min(np.matmul(R, np.transpose(f_samples)),1)
 
         m = len(f)
 
@@ -72,7 +88,7 @@ class AEB:
         # a = np.block([[a], [-a]])
 
         # Assuming Mj = -mj = self.map_width (upperbound/lowerbound for x[i,j])
-        M = max(max_l, max_vsqr)
+        M = max(self._l_max, self._vsqr_max)
         eps = 0.0001
 
         model = Model()
@@ -81,19 +97,29 @@ class AEB:
         z = {(i,j): model.add_var(var_type=BINARY, name="z_%d,%d" % (i, j)) for i in range(m) for j in range(Nf)}
         s = {(i,j): model.add_var(var_type=CONTINUOUS, lb = 0, ub = M, name="s_%d,%d" % (i, j)) for i in range(m) for j in range(Nf)}
 
-        theta = -13/180 * pi
-        a = np.array(((np.cos(theta), np.sin(theta)), (-np.sin(theta), np.cos(theta))))
-        a = np.block([[a], [-a]])
+        a = np.block([[R], [-R]])
 
-        discarded = np.zeros_like(f)
+        discarded_f = np.zeros_like(f)
+        discarded_t = np.zeros_like(f)
+        min_target = [0,0]
+        max_target = [self._l_max, self._vsqr_max]
         for i in range(m):
             if f[i]: # constraints for i in I1
+                if reduce and any((np.matmul(R, np.transpose(x[i])) < [f_min_l, f_min_vsqr]) ^ (np.matmul(R, np.transpose(x[i])) > [f_max_l, f_max_vsqr])): 
+                    if all(x[i] < min_target):
+                        if all(x[i] > max_target):
+                            discarded_t[i] = 1
+                            continue
+                        else:
+                            max_target = x[i]
+                    else:
+                        min_target = x[i]
                 for j in range(Nf):
                     model.add_constr(np.matmul(a[j], x[i]) + b[j] - s[i,j] <= 0)
                     model.add_constr(xsum(s[i, j] for j in range(Nf)) - v[i] * Nf * M <= 0)
             else:# constraints for i in I0
-                if any((x[i] < [min_l, min_vsqr]) ^ (x[i] > [max_l, max_vsqr])): 
-                    discarded[i] = 1
+                if reduce and any((np.matmul(R, np.transpose(x[i])) < [t_min_l, t_min_vsqr]) ^ (np.matmul(R, np.transpose(x[i])) > [t_max_l, t_max_vsqr])): 
+                    discarded_f[i] = 1
                     continue
                 for j in range(Nf):
                     model.add_constr(np.matmul(a[j], x[i]) + b[j] - M*(1 - z[i,j]) <= 0)
@@ -109,10 +135,11 @@ class AEB:
         model.objective = minimize(xsum(v[i] for i in range(m)) + volume_weight * xsum(width[j] for j in range(Nf_hf)))
         #model.objective = minimize(xsum(v[i] for i in range(m)))
                                    
-        print("Discarded %d samples." % sum(discarded))
+        print("Discarded %d samples." % (sum(discarded_f)+sum(discarded_t)))
         model.x = x
         model.f = f
-        model.discarded = discarded
+        model.discarded_f = discarded_f
+        model.discarded_t = discarded_t
 
         model.v = v
         model.a = a
@@ -122,6 +149,6 @@ class AEB:
         model.width = width
         model.theta = theta
 
-        print("Model reduced to using %d samples." % (nr_samples-sum(discarded)))
+        print("Model reduced to using %d samples." % (nr_samples-sum(discarded_f)-sum(discarded_t)))
 
         return model

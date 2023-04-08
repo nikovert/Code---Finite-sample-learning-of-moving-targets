@@ -21,12 +21,8 @@ delta = 10**-4
 d = 4
 k = 1
 eps = 0.19
-# For speed = 0.1
-a_high = 0.009
-a_low  = 0.001
-# For speed = 0.01
-a_high = 0.002096
-a_low = 0.000505
+
+a_high = 0.07671622306528939
 
 # Estimated to need 52342 samples
 # Discarded 51960 samples.
@@ -36,44 +32,23 @@ simulator = AEB(save_change = False)
 
 full_run = False
 if full_run:
-    alpha = np.outer(np.linspace(0.001, 1-0.001, 100), np.ones(100))
-    delta_ratio = alpha.copy().T
-    alpha, delta_ratio = np.meshgrid(np.linspace(0.001, 1-0.001, 100), np.linspace(0.001, 1-0.001, 100))
+    delta_ratio = 0.5;
+    t = np.linspace(0.001, 1-0.001, 100)
 
-    sample_count_range = np.maximum(5*(2*(1+alpha)*a_high + eps)/eps**2 * (-np.log((delta_ratio*delta)/4) + d* 40*(2*(1+alpha)*a_high + eps)/eps**2), -3*k/(alpha**2 * a_low) * np.log(((1-delta_ratio)*delta)))
-    sample_count = int(np.min(sample_count_range))
-    ind = np.unravel_index(np.argmin(sample_count_range, axis=None), sample_count_range.shape)
+    m_min = 5*(2*(a_high+t) + eps)/eps**2 * (-np.log((delta_ratio*delta)/4) + d* np.log(40*(2*(a_high+t) + eps)/eps**2))
+    m_max = -1/(2 * t**2) * np.log(((1-delta_ratio)*delta))
+
+    condition = abs(m_min - m_max+1)
+    ind = np.unravel_index(np.argmin(condition, axis=None), condition.shape)
+    sample_count_range = [m_min[ind], m_max[ind]]
+    sample_count = ceil(np.min(sample_count_range))
 else:
-    sample_count = 1000
+    sample_count = 40329
 
 print("Estimated to need %d samples"%sample_count)
 model = simulator.generateMsampleModel(sample_count)
 #model.emphasis = 1 # FEASIBILITY
 
-# fig1 = plt.figure(figsize=(5,5))
-# simulator.im = plt.imshow(simulator.map, cmap=simulator.CM, interpolation='none')
-
-# fig2 = plt.figure(figsize=(5,5))
-# sample_array = np.zeros(simulator.map.shape)
-# sample_array_min = np.zeros(simulator.map.shape)
-# for i in range(sample_count):
-#     sample_array[round(model.x[i][0]), round(model.x[i][1])] = max(sample_array[round(model.x[i][0]), round(model.x[i][1])], 1 + int(model.f[i]))
-#     if model.discarded[i] < 1:
-#         sample_array_min[round(model.x[i][0]), round(model.x[i][1])] = max(sample_array_min[round(model.x[i][0]), round(model.x[i][1])], 1 + int(model.f[i]))
-
-# # Colours for potting
-# two_colour = simulator.car_colour  
-# one_colour = simulator.ground_colour 
-# zero_colour = "gold" 
-# CM = mpl.colors.ListedColormap([zero_colour,one_colour,two_colour])
-# plt.imshow(sample_array, cmap=CM, interpolation='none')
-# plt.show(block=False)
-
-# fig3 = plt.figure(figsize=(5,5))
-# plt.imshow(sample_array_min, cmap=CM, interpolation='none')
-# plt.show(block=False)
-
-#model.max_mip_gap = k
 status = model.optimize(max_nodes = 10)
 model.write('model.lp')
 if status == OptimizationStatus.OPTIMAL:
@@ -92,13 +67,21 @@ if plot_results:
     plt.scatter(t_samples[:,0], t_samples[:,1], marker='^', alpha=0.3) # Plot samples with f=1
     plt.scatter(f_samples[:,0], f_samples[:,1], marker='o', alpha=0.3) # Plot samples with f=0
     
-    d_sampes = model.x[np.argwhere(model.discarded)[:, 0]]
-    plt.scatter(d_sampes[:,0], d_sampes[:,1], marker='o', alpha=0.3, c='k') # Plot discarded samples
-    
+    t_d_samples = model.x[np.argwhere(model.discarded_t)[:, 0]]
+    f_d_samples = model.x[np.argwhere(model.discarded_f)[:, 0]]
+    plt.scatter(t_d_samples[:,0], t_d_samples[:,1], marker='^', alpha=0.3, c='k') # Plot discarded samples
+    plt.scatter(f_d_samples[:,0], f_d_samples[:,1], marker='o', alpha=0.3, c='k')
+
     plt.xlabel('distance (m)')
     plt.ylabel('speed (m/s)^2')
 
+    print("Discarded %f %% of true samples." % (len(t_d_samples)/len(t_samples)))
+    print("Discarded %f %% of false samples." % (len(f_d_samples)/len(f_samples)))
+        
+    print("Discarded %d %% of %d samples." % (sum(model.discarded_t) + sum(model.discarded_f), sample_count))
+
     simulator.next_step() # t = m+1
+
     ## Find lower left corner
     #       p4 ----- p3
     #       |        |
@@ -113,8 +96,6 @@ if plot_results:
 
     polygon = Polygon([p1, p2, p3, p4], alpha = 0.4)
     plt.gca().add_patch(polygon)
-
-
 
 m = len(model.f)
 max_val = -inf
@@ -134,27 +115,6 @@ for i in range(m):
                 boundary_points.append(model.x[i])
     elif model.v[i].x:
         plt.scatter(model.x[i,0], model.x[i,1], c='r', marker='o')
-
-# for deg in range(0, 360, 45):
-#     rec = Rectangle((x_min,y_min), model.width[0].x,model.width[1].x,
-#                         edgecolor='blue',
-#                         facecolor='none',
-#                         lw=1,
-#                         angle = deg)
-#     plt.gca().add_patch(rec)
-
-# fig5 = plt.figure(figsize=(5,5))
-# simulator.reset_map()
-# simulator.stay_marked = False # only show current position of target
-
-# simulator.next_step()
-# simulator.im = plt.imshow(simulator.map, cmap=simulator.CM, interpolation='none')
-# y_min = min(abs(model.b[0].x), abs(model.b[2].x))
-# x_min = min(abs(model.b[1].x), abs(model.b[3].x))
-# plt.gca().add_patch(Rectangle((x_min,y_min),model.width[1],model.width[0],
-#                     edgecolor='blue',
-#                     facecolor='none',
-#                     lw=1))
 
 # del(model)
 # filepath = 'session.pkl'

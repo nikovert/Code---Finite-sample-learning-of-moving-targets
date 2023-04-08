@@ -15,18 +15,18 @@ import time
 delta = 10**-4
 d = 4
 k = 1
-eps = 0.15
-a_high =  0.001336
+eps = 0.03
+a_high =  0.077
 a_low = 0
 
 # alpha = np.outer(np.linspace(0.001, 1-0.001, 100), np.ones(100))
 # delta_ratio = alpha.copy().T
 # alpha, delta_ratio = np.meshgrid(np.linspace(0.001, 1-0.001, 100), np.linspace(0.001, 1-0.001, 100))
 
-delta_ratio = 0.5;
-t = np.linspace(0.001, 1-0.001, 100)
+delta_ratio = 1-10**-5;
+t = np.linspace(10**-5, 1-10**-5, 10000)
 
-m_min = 5*(2*(a_high+t) + eps)/eps**2 * (-np.log((delta_ratio*delta)/4) + d* 40*(2*(a_high+t) + eps)/eps**2)
+m_min = 5*(2*(a_high+t) + eps)/eps**2 * (-np.log((delta_ratio*delta)/4) + d* np.log(40*(2*(a_high+t) + eps)/eps**2))
 m_max = -1/(2 * t**2) * np.log(((1-delta_ratio)*delta))
 
 condition = abs(m_min - m_max+1)
@@ -38,34 +38,33 @@ print("Starting with %d samples" % sample_count)
 # print("minimum alpha: %f" % alpha[ind])
 # print("minimum delta_ratio: %f" % delta_ratio[ind])
 
-
-sample_count = 100
-
-# Time horizon
-T = 2000; #in seconds
-dt = T/sample_count
-
 rounds = 5
 global_a_high = np.zeros(rounds)
 global_a_low = np.zeros(rounds)
 global_mu = np.zeros(rounds)
-global_dt = np.zeros(rounds)
-global_T = np.zeros(rounds)
 global_m = np.zeros(rounds)
 for iter in range(rounds):
     print("Starting round %d" % iter)
     repeat = True
     while repeat:
         # Generate initial Map
-        my_sys = AEB()
+        simulator = AEB()
         mu = 0
         m = int(sample_count)
+        K = 2000
+        f = np.zeros((K,m))
+        x = np.zeros((K,2,m))
         for i in range(m):
-            my_sys.next_step(dt)
+            (x[:,:,i],f[:,i]) = simulator.genSamples_nostep(K)
+            simulator.next_step()
+
+        simulator.next_step() # proceed to m+1
         for i in range(m):
-            change = my_sys.map_archive[m-1-i]^my_sys.map
-            p_i = np.count_nonzero(change)/my_sys.map.size
-            mu += p_i
+            f_last = np.zeros(K)
+            for j in range(K):
+                f_last[j] = simulator.safety_label(x[j,0,i], x[j,1,i])
+            mu += np.count_nonzero(f_last != f[:,i])/K
+
         print("Calculated mu = %f" % mu)
 
         # mu = a*m
@@ -75,25 +74,18 @@ for iter in range(rounds):
         #global_a_low[iter]  = a_low
         global_mu[iter] = mu
         # Calculate the number of samples needed
-        m_min = 5*(2*(a_high+t) + eps)/eps**2 * (-np.log((delta_ratio*delta)/4) + d* 40*(2*(a_high+t) + eps)/eps**2)
+        m_min = 5*(2*(a_high+t) + eps)/eps**2 * (-np.log((delta_ratio*delta)/4) + d* np.log(40*(2*(a_high+t) + eps)/eps**2))
         m_max = -1/(2 * t**2) * np.log(((1-delta_ratio)*delta))
 
         condition = abs(m_min - m_max+1)
         ind = np.unravel_index(np.argmin(condition, axis=None), condition.shape)
         sample_count_range = [m_min[ind], m_max[ind]]
-        sample_count = ceil(np.max(sample_count_range))-1
-
-        sample_count *= (iter+1)
-
-        dt = T/ sample_count
-        global_dt[iter] = dt
-        global_T[iter] = T
+        sample_count = ceil((m_min[ind] + m_max[ind])/2)
+        
         global_m[iter] = m
         print("Estimated to need %d samples" % sample_count)
-        print("Calculated dt = %f" % dt)
-        if (sample_count >= m_min[ind]) & (sample_count <= m_max[ind]):
+        if (m >= m_min[ind]) & (m <= m_max[ind]):
             repeat = False
-        repeat = False
     
     
 print("After %d rounds the following bounds have been found"%rounds)
