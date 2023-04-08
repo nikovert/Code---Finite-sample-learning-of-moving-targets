@@ -32,7 +32,8 @@ m_max = -1/(2 * t**2) * np.log(((1-delta_ratio)*delta))
 condition = abs(m_min - m_max+1)
 ind = np.unravel_index(np.argmin(condition, axis=None), condition.shape)
 sample_count_range = [m_min[ind], m_max[ind]]
-sample_count = ceil(np.min(sample_count_range))
+sample_count = ceil((m_min[ind] + m_max[ind])/2)
+
 # ind = np.unravel_index(np.argmin(sample_count_range, axis=None), sample_count_range.shape)
 print("Starting with %d samples" % sample_count)
 # print("minimum alpha: %f" % alpha[ind])

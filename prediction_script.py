@@ -20,9 +20,9 @@ if False:
 delta = 10**-4
 d = 4
 k = 1
-eps = 0.19
+eps = 0.03
 
-a_high = 0.07671622306528939
+a_high = 0.077
 
 # Estimated to need 52342 samples
 # Discarded 51960 samples.
@@ -30,10 +30,10 @@ a_high = 0.07671622306528939
 np.random.seed(19680801)
 simulator = AEB(save_change = False)
 
-full_run = False
+full_run = True
 if full_run:
-    delta_ratio = 0.5;
-    t = np.linspace(0.001, 1-0.001, 100)
+    delta_ratio = 1-10**-5;
+    t = np.linspace(10**-5, 1-10**-5, 10000)
 
     m_min = 5*(2*(a_high+t) + eps)/eps**2 * (-np.log((delta_ratio*delta)/4) + d* np.log(40*(2*(a_high+t) + eps)/eps**2))
     m_max = -1/(2 * t**2) * np.log(((1-delta_ratio)*delta))
@@ -41,7 +41,7 @@ if full_run:
     condition = abs(m_min - m_max+1)
     ind = np.unravel_index(np.argmin(condition, axis=None), condition.shape)
     sample_count_range = [m_min[ind], m_max[ind]]
-    sample_count = ceil(np.min(sample_count_range))
+    sample_count = ceil((m_min[ind] + m_max[ind])/2)
 else:
     sample_count = 40329
 
