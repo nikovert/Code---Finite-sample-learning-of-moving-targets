@@ -65,6 +65,7 @@ class AEB:
         # Get samples
         (x,f) = self.genSamples(dt, m=nr_samples)
 
+        theta_degrees = 45 * 0.5*self.m/self.F
         theta = -13/180 * pi # Fixed rotation angle
         R = np.array(((np.cos(theta), np.sin(theta)), (-np.sin(theta), np.cos(theta))))
 
@@ -103,17 +104,18 @@ class AEB:
         discarded_t = np.zeros_like(f)
         min_target = [0,0]
         max_target = [self._l_max, self._vsqr_max]
+
         for i in range(m):
             if f[i]: # constraints for i in I1
-                if reduce and any((np.matmul(R, np.transpose(x[i])) < [f_min_l, f_min_vsqr]) ^ (np.matmul(R, np.transpose(x[i])) > [f_max_l, f_max_vsqr])): 
-                    if all(x[i] < min_target):
-                        if all(x[i] > max_target):
-                            discarded_t[i] = 1
-                            continue
-                        else:
-                            max_target = x[i]
-                    else:
-                        min_target = x[i]
+                # if reduce and any((np.matmul(R, np.transpose(x[i])) < [f_min_l, f_min_vsqr]) ^ (np.matmul(R, np.transpose(x[i])) > [f_max_l, f_max_vsqr])): 
+                #     if all(x[i] < min_target):
+                #         if all(x[i] > max_target):
+                #             discarded_t[i] = 1
+                #             continue
+                #         else:
+                #             max_target = x[i]
+                #     else:
+                #         min_target = x[i]
                 for j in range(Nf):
                     model.add_constr(np.matmul(a[j], x[i]) + b[j] - s[i,j] <= 0)
                     model.add_constr(xsum(s[i, j] for j in range(Nf)) - v[i] * Nf * M <= 0)
@@ -126,16 +128,17 @@ class AEB:
                     model.add_constr(eps + (-M - eps)*z[i,j] - s[i,j] - np.matmul(a[j], x[i])- b[j]<= 0)
                     model.add_constr(xsum(z[i, j] for j in range(Nf)) + 1 - Nf <= 0)
                     model.add_constr(xsum(s[i, j] for j in range(Nf)) - v[i] * Nf * M <= 0)
-        width = {j: model.add_var(var_type=CONTINUOUS, lb = -M, ub = M, name="width_%d" % j) for j in range(Nf_hf)}
+        width = {j: model.add_var(var_type=CONTINUOUS, lb = 0, ub = 2*M, name="width_%d" % j) for j in range(Nf_hf)}
         for j in range(Nf_hf):
             model.add_constr(-b[j] - b[j + Nf_hf] == width[j])
-            model.add_constr(width[j] >= 0)
         
-        volume_weight = 10**-4
+        volume_weight = 10**-ceil(log(m)-8)
         model.objective = minimize(xsum(v[i] for i in range(m)) + volume_weight * xsum(width[j] for j in range(Nf_hf)))
         #model.objective = minimize(xsum(v[i] for i in range(m)))
                                    
         print("Discarded %d samples." % (sum(discarded_f)+sum(discarded_t)))
+        print("Discarded %f %% of true samples." % (sum(discarded_t)/len(t_samples)))
+        print("Discarded %f %% of false samples." % (sum(discarded_f)/len(f_samples)))
         model.x = x
         model.f = f
         model.discarded_f = discarded_f

@@ -49,7 +49,7 @@ print("Estimated to need %d samples"%sample_count)
 model = simulator.generateMsampleModel(sample_count)
 #model.emphasis = 1 # FEASIBILITY
 
-status = model.optimize(max_nodes = 10)
+status = model.optimize(max_nodes = 2000)
 model.write('model.lp')
 if status == OptimizationStatus.OPTIMAL:
     print('optimal solution cost {} found'.format(model.objective_value))
