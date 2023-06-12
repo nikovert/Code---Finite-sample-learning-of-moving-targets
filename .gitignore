@@ -2,3 +2,5 @@
 *.icloud
 *.pyc
 *.lp
+.DS_Store
+*pkl

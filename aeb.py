@@ -7,9 +7,9 @@ import copy as cp
 class AEB:
     # Parameters
     braking_force = 2000 # braking force in N for p=100%
-    m = 900 # mass of the vehicle in kg
-    _l_min = 30
-    _l_max = 100
+    M = 900 # mass of the vehicle in kg
+    _l_min = 60
+    _l_max = 120
     v_min = 5 # in km/h
     v_max = 160 # in km/h
     _vsqr_min = (0.27777778*v_min)**2
@@ -19,6 +19,7 @@ class AEB:
         self._p = 1 # Brake performance in range [0,1]
         self._mu_vsqr = (0.27777778*70)**2 # assume 70km/h average speed
         self._sigma_vsqr = (0.27777778*20)**2
+        self._singleFacet = True
         
     @property
     def F(self):
@@ -30,7 +31,7 @@ class AEB:
         self._p = 1 
 
     def next_step(self, dt=1):
-        mult_loss = min(1,random.gauss(mu=1.0, sigma=10**-5))
+        mult_loss = min(1.00,random.gauss(mu=1.0, sigma=10**-3))
         self._p = self._p*mult_loss*dt 
 
     def genSamples(self, dt=1, m=1):
@@ -38,8 +39,10 @@ class AEB:
         l = np.random.uniform(low=self._l_min, high=self._l_max, size=m)
         vsqr = np.minimum(np.maximum(np.random.normal(self._mu_vsqr, self._sigma_vsqr, size=m), self._vsqr_min), self._vsqr_max)
         f = np.zeros(m)
+        self.F_list = np.zeros(m)
         for i in range(m):
             self.next_step(dt)
+            self.F_list[i] = self.F
             # Generate label
             f[i] = self.safety_label(l[i], vsqr[i])
         x = np.stack((l, vsqr), axis=1)
@@ -59,19 +62,19 @@ class AEB:
     def safety_label(self, l, vsqr):
         # return safety label for a distance l in m and speed v in km/h
         # 1 Kilometer/hour = 0.27777778 Meter/second
-        return 0.5*vsqr * self.m/self.F < l
+        return 0.5*vsqr * self.M/self.F < l
 
     def generateMsampleModel(self, nr_samples, dt=1, reduce=True):
         # Get samples
         (x,f) = self.genSamples(dt, m=nr_samples)
 
-        theta_degrees = 45 * 0.5*self.m/self.F
-        theta = -13/180 * pi # Fixed rotation angle
+        theta_degrees = 45 * 0.5*self.M/self.F
+        theta = -theta_degrees/180 * pi # Fixed rotation angle
         R = np.array(((np.cos(theta), np.sin(theta)), (-np.sin(theta), np.cos(theta))))
 
         if reduce:
            margin = 0.0
-           t_samples =  x[np.argwhere(f)[:, 0]]
+           t_samples =  x[np.argwhere(f>0)[:, 0]]
            t_max_l, t_max_vsqr =  margin + np.max(np.matmul(R, np.transpose(t_samples)),1)
            t_min_l, t_min_vsqr = -margin + np.min(np.matmul(R, np.transpose(t_samples)),1)
            
@@ -132,7 +135,8 @@ class AEB:
         for j in range(Nf_hf):
             model.add_constr(-b[j] - b[j + Nf_hf] == width[j])
         
-        volume_weight = 10**-ceil(log(m)-8)
+        volume_weight = 10**-ceil(log(m)-8) # for m = 20000
+        volume_weight = 0.01 
         model.objective = minimize(xsum(v[i] for i in range(m)) + volume_weight * xsum(width[j] for j in range(Nf_hf)))
         #model.objective = minimize(xsum(v[i] for i in range(m)))
                                    
@@ -143,6 +147,7 @@ class AEB:
         model.f = f
         model.discarded_f = discarded_f
         model.discarded_t = discarded_t
+        model.F_list = self.F_list
 
         model.v = v
         model.a = a
