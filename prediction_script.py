@@ -14,21 +14,26 @@ from numpy import linalg as LA
 def prune(model, distance):
     index = 0
     check = model.x.shape[0]
+    discard_list = np.zeros(model.x.shape)
+    discard_list[model.discard_indices] = 1
     while check>0:
         if check == model.x.shape[0]:
             index = random.randint(0, model.x.shape[0]-1)
         else:
             index = (index+1)%model.x.shape[0]
+
         elements = np.argwhere(LA.norm(abs(model.x[index,:]-model.x), axis=1) < distance)[1:]
+
         if elements.shape[0] > 0:
             model.x = np.delete(model.x, elements, 0)
             model.f = np.delete(model.f, elements, 0)
-            model.discarded_t = np.delete(model.discarded_t, elements, 0)
-            model.discarded_f = np.delete(model.discarded_f, elements, 0)
+            discard_list = np.delete(discard_list, elements, 0)
             model.F_list  = np.delete(model.F_list, elements, 0)
             check = min(check, model.x.shape[0])
         else:
             check -= 1
+    
+    model.discard_indices = np.argwhere(discard_list[:,0])[:,0]
     return model
 
 
@@ -210,10 +215,8 @@ f_samples = prnd_model.x[np.argwhere(prnd_model.f<1)[:,0],:]
 plt.scatter(t_samples[:,0], t_samples[:,1], marker='^', alpha=0.1, c='b') # Plot samples with f=1
 plt.scatter(f_samples[:,0], f_samples[:,1], marker='o', alpha=0.1, c='g') # Plot samples with f=0
 
-t_d_samples = prnd_model.x[np.argwhere(model.discarded_t)[:, 0]]
-f_d_samples = prnd_model.x[np.argwhere(model.discarded_f)[:, 0]]
-plt.scatter(t_d_samples[:,0], t_d_samples[:,1], marker='^', alpha=0.8, c='b', edgecolors = 'red') # Plot discarded samples
-plt.scatter(f_d_samples[:,0], f_d_samples[:,1], marker='o', alpha=0.8, c='g', edgecolors = 'red')
+discarded_samples = prnd_model.x[model.discard_indices]
+plt.scatter(discarded_samples[:,0], discarded_samples[:,1], marker='o', alpha=0.8, c='b', edgecolors = 'red') # Plot discarded samples
 
 
 # del(model)
