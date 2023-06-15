@@ -1,0 +1,5 @@
+# .pylintrc
+
+[MESSAGES CONTROL]
+
+disable=C0103 # Ignore naming convention
