@@ -4,63 +4,25 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from numpy import linalg as LA
-from mip import Model, OptimizationStatus
-#from dill import dump_session, load_session
+from mip import OptimizationStatus
+# from dill import dump_session, load_session
 from aeb import AEB
 
-
-def prune(model, distance):
-    """
-    Prunes the model by removing samples within a certain distance from each other.
-
-    Args:
-        model (Model): The model to be pruned.
-        distance (float): The distance threshold for pruning.
-
-    Returns:
-        Model: The pruned model.
-    """
-    index = 0
-    check = model.x.shape[0]
-    discard_list = np.zeros(model.x.shape)
-    discard_list[model.discard_indices] = 1
-    while check > 0:
-        if check == model.x.shape[0]:
-            index = random.randint(0, model.x.shape[0]-1)
-        else:
-            index = (index+1) % model.x.shape[0]
-
-        elements = np.argwhere(
-            LA.norm(abs(model.x[index, :]-model.x), axis=1) < distance)[1:]
-
-        if elements.shape[0] > 0:
-            model.x = np.delete(model.x, elements, 0)
-            model.f = np.delete(model.f, elements, 0)
-            discard_list = np.delete(discard_list, elements, 0)
-            model.F_list = np.delete(model.F_list, elements, 0)
-            check = min(check, model.x.shape[0])
-        else:
-            check -= 1
-
-    model.discard_indices = np.argwhere(discard_list[:, 0])[:, 0]
-    return model
-
-
-load_model = False
-if load_model:
-    filepath = 'session.pkl'
-    load_session(filepath)  # Load the session
-    model = Model()
-    model.read('model.lp')
-    print(
-        f"model has {model.num_cols} vars, {model.num_rows} constraints and {model.num_nz} nzs")
+# load_model = False
+# if load_model:
+#    filepath = 'session.pkl'
+#    load_session(filepath)  # Load the session
+#    model = Model()
+#    model.read('model.lp')
+#    print(
+#        f"model has {model.num_cols} vars, {model.num_rows} constraints and {model.num_nz} nzs")
 
 
 delta = 10**-4
-d = 4
+d = 1
 k = 1
-eps = 0.3
-a_high = 0.001843
+eps = 0.01
+a_high = 0.035
 
 # Estimated to need 18 728 samples
 # Discarded _  samples.
@@ -68,7 +30,7 @@ a_high = 0.001843
 np.random.seed(19681800)
 simulator = AEB()
 
-full_run = False
+full_run = True
 if full_run:
     delta_ratio = 1-10**-5
     t = np.linspace(10**-5, 1-10**-5, 10000)
@@ -87,7 +49,7 @@ else:
 print(f"Estimated to need {sample_count} samples")
 model = simulator.generateMsampleModel(sample_count)
 
-solveMIP = True
+solveMIP = False
 if solveMIP:
     status = model.optimize(max_nodes=2000)
     model.write('model_archive/model.lp')
@@ -101,22 +63,22 @@ if solveMIP:
             f"no feasible solution found, lower bound is: {model.objective_bound}")
         plt.show(block=True)
 
-violation_points = []
-for i in range(len(model.f)):
-    if not model.v[i].x:
-        violation_points.append(model.x[i])
+if solveMIP:
+    violation_points = []
+    for i in range(len(model.f)):
+        if not model.v[i].x:
+            violation_points.append(model.x[i])
 
 prune_dist = 3
 prnd_model = prune(model, prune_dist)
 
-prnd_violation_points = []
-for p in violation_points:
-    if p in prnd_model.x:
-        prnd_violation_points.append(p)
-
 m = len(prnd_model.f)
-plot_results = True
-if plot_results:
+if solveMIP:
+    prnd_violation_points = []
+    for p in violation_points:
+        if p in prnd_model.x:
+            prnd_violation_points.append(p)
+
     fig0 = plt.figure(figsize=(5, 5))
     t_samples = prnd_model.x[np.argwhere(prnd_model.f)[:, 0]]
     f_samples = prnd_model.x[np.argwhere(prnd_model.f < 1)[:, 0]]
@@ -163,7 +125,7 @@ if plot_results:
     # Draw extended Facet p1--p4
     ax.axline(p1, p4, lw=2, color='r')
     for i in range(m):
-        if any([np.all(prnd_model.x[i] == elem) for elem in prnd_violation_points]):
+        if not any(np.all(prnd_model.x[i] == elem) for elem in prnd_violation_points):
             if prnd_model.f[i]:
                 plt.scatter(
                     prnd_model.x[i, 0], prnd_model.x[i, 1], c='b', marker='^', edgecolors='red')
@@ -251,9 +213,13 @@ plt.scatter(f_samples[:, 0], f_samples[:, 1], marker='o',
             alpha=0.1, c='g')  # Plot samples with f=0
 
 #  Highlight discarded samples
-discarded_samples = prnd_model.x[model.discard_indices]
-plt.scatter(discarded_samples[:, 0], discarded_samples[:, 1], marker='o',
-            alpha=0.8, c='b', edgecolors='red')  # Plot discarded samples
+for i in prnd_model.discard_indices:
+    if prnd_model.f[i] > 0:
+        plt.scatter(prnd_model.x[i,0], prnd_model.x[i,1], marker='^',
+                    alpha=0.4, c='b', edgecolors='red')  # Plot discarded samples
+    else:
+        plt.scatter(prnd_model.x[i,0], prnd_model.x[i,1], marker='o',
+                    alpha=0.4, c='g', edgecolors='red')  # Plot discarded samples
 plt.xlabel('distance (m)')
 plt.ylabel('speed (m/s)^2')
 
@@ -261,3 +227,43 @@ plt.ylabel('speed (m/s)^2')
 # filepath = 'session.pkl'
 # dump_session(filepath) # Save the session
 plt.show()
+
+
+##########################################################
+#                         FUNCTIONS
+##########################################################
+def prune(model, distance):
+    """
+    Prunes the model by removing samples within a certain distance from each other.
+
+    Args:
+        model (Model): The model to be pruned.
+        distance (float): The distance threshold for pruning.
+
+    Returns:
+        Model: The pruned model.
+    """
+    index = 0
+    check = model.x.shape[0]
+    discard_list = np.zeros(model.x.shape)
+    discard_list[model.discard_indices] = 1
+    while check > 0:
+        if check == model.x.shape[0]:
+            index = random.randint(0, model.x.shape[0]-1)
+        else:
+            index = (index+1) % model.x.shape[0]
+
+        elements = np.argwhere(
+            LA.norm(abs(model.x[index, :]-model.x), axis=1) < distance)[1:]
+
+        if elements.shape[0] > 0:
+            model.x = np.delete(model.x, elements, 0)
+            model.f = np.delete(model.f, elements, 0)
+            discard_list = np.delete(discard_list, elements, 0)
+            model.F_list = np.delete(model.F_list, elements, 0)
+            check = min(check, model.x.shape[0])
+        else:
+            check -= 1
+
+    model.discard_indices = np.argwhere(discard_list[:, 0])[:, 0]
+    return model

@@ -3,7 +3,6 @@ import random
 import numpy as np
 from mip import Model, minimize, xsum, BINARY, CONTINUOUS
 
-
 class AEB:
     """Class for AEB (Automatic Emergency Braking) system."""
 
@@ -40,7 +39,7 @@ class AEB:
 
     def next_step(self, dt=1):
         """Calculate the brake performance for the next time step."""
-        mult_loss = min(1.00+10**-4, random.gauss(mu=1.0, sigma=10**-3))
+        mult_loss = min(1.00, random.gauss(mu=1.0-10**-7, sigma=10**-6))
         self._p = self._p*mult_loss*dt
 
     def safety_label(self, l, vsqr):
@@ -48,7 +47,7 @@ class AEB:
         F = self.measure_F()
         return 0.5*vsqr * self.M/F < l
 
-    def genSamples(self, dt=1, m=1):
+    def genSamples(self, dt=1, m=1, noStep=False):
         """Generate samples for the AEB system."""
         l = np.random.uniform(low=self.l_min, high=self.l_max, size=m)
         vsqr = np.minimum(np.maximum(np.random.normal(
@@ -56,21 +55,9 @@ class AEB:
         f = np.zeros(m)
         self.F_list = np.zeros(m)  # Log true braking force (for reference)
         for i in range(m):
-            self.next_step(dt)
+            if not noStep:
+                self.next_step(dt)
             self.F_list[i] = self.F
-            #  Generate label
-            f[i] = self.safety_label(l[i], vsqr[i])
-        x = np.stack((l, vsqr), axis=1)
-        return (x, f)
-
-    def genSamples_nostep(self, m=1):
-        """Generate samples without a step for the AEB system."""
-        # Assuming map.shape[0] = map.shape[1]
-        l = np.random.uniform(low=self.l_min, high=self.l_max, size=m)
-        vsqr = np.minimum(np.maximum(np.random.normal(
-            self._mu_vsqr, self._sigma_vsqr, size=m), self.vsqr_min), self.vsqr_max)
-        f = np.zeros(m)
-        for i in range(m):
             #  Generate label
             f[i] = self.safety_label(l[i], vsqr[i])
         x = np.stack((l, vsqr), axis=1)
@@ -90,7 +77,13 @@ class AEB:
 
         # Calculate the minimum and maximum coordinates for each dimension in the rotated_t_samples
         min_coords = np.min(rotated_t_samples, axis=1)
-        max_coords = np.max(rotated_t_samples, axis=1)
+
+        if self.singleFacet:
+            rotated_f_samples = np.matmul(R, np.transpose(
+                samples[np.argwhere(label < 1)[:, 0]]))
+            max_coords = np.max(rotated_f_samples, axis=1)
+        else:
+            max_coords = np.max(rotated_t_samples, axis=1)
 
         # Initialize a list to store the indices of samples to be discarded
         discard_indices = []
@@ -100,6 +93,9 @@ class AEB:
             if self.singleFacet:
                 indices = np.argwhere(np.logical_and(
                     rotated_samples[0] < min_coords[0], label < 1)).flatten()
+                discard_indices.extend(indices)
+                indices = np.argwhere(np.logical_and(
+                    rotated_samples[0] > max_coords[0], label > 0)).flatten()
                 discard_indices.extend(indices)
             else:
                 # Find the indices where the rotated_f_samples are lower/higher than the minimum coordinate
@@ -119,7 +115,7 @@ class AEB:
         """Generate an M-sample model for the AEB system using the MIP optimization."""
 
         # Get samples
-        (x, f) = self.genSamples(dt, m)
+        (x, f) = self.genSamples(dt=dt, m=m)
 
         #  Add fixed rotation of the hyperrectangle based on a measurment of the braking force
         theta = atan(-0.5*self.M/self.measure_F())
@@ -154,8 +150,7 @@ class AEB:
 
         a = np.block([[R], [-R]])
 
-        valid_indices = [i for i in range(m) if i not in discard_indices]
-        for i in valid_indices:
+        for i in range(m):
             if i in discard_indices:
                 continue
             if f[i]:
