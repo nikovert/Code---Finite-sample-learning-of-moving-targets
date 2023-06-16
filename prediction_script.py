@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from numpy import linalg as LA
 from mip import OptimizationStatus
-from dill import dump_session, load_session
+#from dill import dump_session, load_session
 from aeb import AEB
 
 ##########################################################
@@ -75,10 +75,10 @@ a_high = 0.035
 np.random.seed(19681800)
 simulator = AEB()
 
-full_run = False
+full_run = True
 if full_run:
-    delta_ratio = 1-10**-5
-    t = np.linspace(10**-5, 1-10**-5, 10000)
+    delta_ratio = 1-10**-6
+    t = np.linspace(10**-6, 1-10**-6, 10000)
 
     m_min = 5*(2*(a_high+t) + eps)/eps**2 * (-np.log((delta_ratio *
                                                       delta)/4) + d * np.log(40*(2*(a_high+t) + eps)/eps**2))
