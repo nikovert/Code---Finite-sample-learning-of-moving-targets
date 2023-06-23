@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from mip import OptimizationStatus
 # from dill import dump_session, load_session
-from hypothesis import Hypothesis
+from hypothesis import Hypothesis, compute_required_samples
 
 
 ##########################################################
@@ -20,31 +20,11 @@ from hypothesis import Hypothesis
 #    print(
 #        f"model has {model.num_cols} vars, {model.num_rows} constraints and {model.num_nz} nzs")
 
-
-delta = 10**-4
-d = 1
-k = 1
-eps = 0.01
-a_high = 0.035
-
-# Estimated to need 18 728 samples
-# Discarded _  samples.
-# Model reduced to using _ samples.
 np.random.seed(19682802)
 
 full_run = True
 if full_run:
-    delta_ratio = 1-10**-6
-    t = np.linspace(10**-6, 1-10**-6, 10000)
-
-    m_min = 5*(2*(a_high+t) + eps)/eps**2 * (-np.log((delta_ratio *
-                                                      delta)/4) + d * np.log(40*(2*(a_high+t) + eps)/eps**2))
-    m_max = -1/(2 * t**2) * np.log(((1-delta_ratio)*delta))
-
-    condition = abs(m_min - m_max+1)
-    ind = np.unravel_index(np.argmin(condition, axis=None), condition.shape)
-    sample_count_range = [m_min[ind], m_max[ind]]
-    sample_count = ceil((m_min[ind] + m_max[ind])/2)
+    sample_count = compute_required_samples()
 else:
     sample_count = 500
 

@@ -5,14 +5,45 @@ from numpy import linalg as LA
 from scipy.stats import norm
 from aeb import AEB
 
+"""
+    Main results from paper: Hypothesis class for hypothesis generation and compute_required_samples function to find m
+"""
+
+
+def compute_required_samples(eps=0.01, delta=10**-4, a_high=0.035, vc_dim=1):
+    """
+    Compute the required number of samples for a hypothesis test.
+
+    Args:
+        eps (float): The desired precision. The default value is 0.01.
+        delta (float): The desired maximum error probability. The default value is 10**-4.
+        a_high (float): The upper bound on the empirical error of the hypothesis. The default value is 0.035.
+        vc_dim (int): The VC dimension of the hypothesis class. The default value is 1.
+
+    Returns:
+        int: The required number of samples for the hypothesis test.
+    """
+    delta_ratio = 1-10**-6
+    t = np.linspace(10**-6, 1-10**-6, 10000)
+
+    m_min = 5*(2*(a_high+t) + eps)/eps**2 * (-np.log((delta_ratio *
+                                                      delta)/4) + vc_dim * np.log(40*(2*(a_high+t) + eps)/eps**2))
+    m_max = -1/(2 * t**2) * np.log(((1-delta_ratio)*delta))
+
+    condition = abs(m_min - m_max+1)
+    ind = np.unravel_index(np.argmin(condition, axis=None), condition.shape)
+    sample_count = ceil((m_min[ind] + m_max[ind])/2)
+    return sample_count
+
+
 class Hypothesis(Model):
     """
-        A class representing a hypothesis model for the AEB system.
+    A class representing a hypothesis model for the AEB system.
 
-        Args:
-            singleFacet (bool, optional): Flag indicating whether to use a single facet or multiple facets. 
-                                         Defaults to True.
-        """
+    Args:
+        singleFacet (bool, optional): Flag indicating whether to use a single facet or multiple facets. 
+                                        Defaults to True.
+    """
 
     def __init__(self, singleFacet=True):
         super().__init__()
@@ -92,7 +123,10 @@ class Hypothesis(Model):
         while check > 0:
             #  Get all elments close to the indexed sample
             index = index_list[check]
-            reference_point = prnd_model.x[index, :]
+            if check > prnd_model.x.shape[0]-1:
+                reference_point, f = prnd_model.simulator.genSamples()
+            else:
+                reference_point = prnd_model.x[index, :]
             elements = np.argwhere(
                 LA.norm((reference_point-prnd_model.x)/c, axis=1) < distance)[1:]
 

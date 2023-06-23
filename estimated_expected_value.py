@@ -1,31 +1,11 @@
-from math import ceil
 from matplotlib import pyplot as plt
 import numpy as np
 from aeb import AEB
+from hypothesis import compute_required_samples
 
 # This script runs a basic monte carlo simulation to estimate the expected value of probability of the disagreement between f_i and f_m+1
 
-delta = 10**-4
-d = 1
-k = 1
-eps = 0.01
-a_high = 0.035
-
-# alpha = np.outer(np.linspace(0.001, 1-0.001, 100), np.ones(100))
-# delta_ratio = alpha.copy().T
-# alpha, delta_ratio = np.meshgrid(np.linspace(0.001, 1-0.001, 100), np.linspace(0.001, 1-0.001, 100))
-
-delta_ratio = 1-10**-5
-t = np.linspace(10**-5, 1-10**-5, 10000)
-
-m_min = 5*(2*(a_high+t) + eps)/eps**2 * (-np.log((delta_ratio *
-                                                  delta)/4) + d * np.log(40*(2*(a_high+t) + eps)/eps**2))
-m_max = -1/(2 * t**2) * np.log(((1-delta_ratio)*delta))
-
-condition = abs(m_min - m_max+1)
-ind = np.unravel_index(np.argmin(condition, axis=None), condition.shape)
-sample_count_range = [m_min[ind], m_max[ind]]
-sample_count = ceil((m_min[ind] + m_max[ind])/2)
+sample_count = compute_required_samples()
 
 print(f"Starting with {sample_count} samples")
 
@@ -37,7 +17,7 @@ while repeat:
     simulator = AEB()
     mu = 0
     m = int(sample_count)
-    f = np.zeros((K, m))    
+    f = np.zeros((K, m))
     x = np.zeros((K, 2, m))
     # Draw K samples for each timestep 0->m
     for i in range(m):
@@ -45,9 +25,10 @@ while repeat:
         simulator.next_step()
 
     # Compute the disagreement between the safety labels at the original timestep and m+1
-    disagreements = np.sum(simulator.safety_label(x[:, 0, :m], x[:, 1, :m]) != f[:, :m], axis=0)
+    disagreements = np.sum(simulator.safety_label(
+        x[:, 0, :m], x[:, 1, :m]) != f[:, :m], axis=0)
     mu = np.sum(disagreements)/K
-    a= mu/m
+    a = mu/m
     print(f"Calculated mu = {mu}")
     print(f"Calculated a = {a}")
 
@@ -55,22 +36,14 @@ while repeat:
     a_high = 1.01*a
 
     # Calculate the number of samples needed
-    m_min = 5*(2*(a_high+t) + eps)/eps**2 * (-np.log((delta_ratio *
-                                                        delta)/4) + d * np.log(40*(2*(a_high+t) + eps)/eps**2))
-    m_max = -1/(2 * t**2) * np.log(((1-delta_ratio)*delta))
-
-    condition = abs(m_min - m_max+1)
-    ind = np.unravel_index(
-        np.argmin(condition, axis=None), condition.shape)
-    sample_count_range = [m_min[ind], m_max[ind]]
-    sample_count = ceil((m_min[ind] + m_max[ind])/2)
+    sample_count = compute_required_samples(a_high=a_high)
 
     print(f"Estimated to need {sample_count} samples")
     if (sample_count <= m) and (0.9*m <= sample_count):
         repeat = False
         print("Done")
 
-# Plot evolution of 'a'        
+# Plot evolution of 'a'
 plt.plot(a_list)
 plt.show()
 
