@@ -3,3 +3,11 @@
 [MESSAGES CONTROL]
 
 disable=C0103 # Ignore naming convention
+
+[MESSAGES CONTROL: huginn/hypothesis.py]
+disable = E1101
+
+[REPORTS]
+
+[pylint:reports]
+output-format = colorized

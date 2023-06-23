@@ -4,3 +4,4 @@
 *.lp
 .DS_Store
 *pkl
+Figures/TestSamples/*

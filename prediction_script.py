@@ -1,53 +1,11 @@
 from math import cos, sin, ceil, floor
-import random
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
-from numpy import linalg as LA
 from mip import OptimizationStatus
-#from dill import dump_session, load_session
-from aeb import AEB
+# from dill import dump_session, load_session
+from hypothesis import Hypothesis
 
-##########################################################
-#                         FUNCTIONS
-##########################################################
-
-
-def prune(model, distance):
-    """
-    Prunes the model by removing samples within a certain distance from each other.
-
-    Args:
-        model (Model): The model to be pruned.
-        distance (float): The distance threshold for pruning.
-
-    Returns:
-        Model: The pruned model.
-    """
-    index = 0
-    check = model.x.shape[0]
-    discard_list = np.zeros(model.x.shape)
-    discard_list[model.discard_indices] = 1
-    while check > 0:
-        if check == model.x.shape[0]:
-            index = random.randint(0, model.x.shape[0]-1)
-        else:
-            index = (index+1) % model.x.shape[0]
-
-        elements = np.argwhere(
-            LA.norm(abs(model.x[index, :]-model.x), axis=1) < distance)[1:]
-
-        if elements.shape[0] > 0:
-            model.x = np.delete(model.x, elements, 0)
-            model.f = np.delete(model.f, elements, 0)
-            discard_list = np.delete(discard_list, elements, 0)
-            model.F_list = np.delete(model.F_list, elements, 0)
-            check = min(check, model.x.shape[0])
-        else:
-            check -= 1
-
-    model.discard_indices = np.argwhere(discard_list[:, 0])[:, 0]
-    return model
 
 ##########################################################
 #                        MAIN SCRIPT
@@ -72,10 +30,9 @@ a_high = 0.035
 # Estimated to need 18 728 samples
 # Discarded _  samples.
 # Model reduced to using _ samples.
-np.random.seed(19681800)
-simulator = AEB()
+np.random.seed(19682802)
 
-full_run = True
+full_run = False
 if full_run:
     delta_ratio = 1-10**-6
     t = np.linspace(10**-6, 1-10**-6, 10000)
@@ -89,10 +46,11 @@ if full_run:
     sample_count_range = [m_min[ind], m_max[ind]]
     sample_count = ceil((m_min[ind] + m_max[ind])/2)
 else:
-    sample_count = 5000
+    sample_count = 500
 
 print(f"Estimated to need {sample_count} samples")
-model = simulator.generateMsampleModel(sample_count, reduce=True)
+model = Hypothesis()  # Generate empty Hypothesis with a simulator attached
+model.generateMsampleModel(sample_count, reduce=True)
 
 solveMIP = True
 if solveMIP:
@@ -114,8 +72,8 @@ if solveMIP:
         if not model.v[i].x:
             violation_points.append(model.x[i])
 
-prune_dist = 3
-prnd_model = prune(model, prune_dist)
+prune_dist = 0.014
+prnd_model = model.prune(prune_dist)
 
 m = len(prnd_model.f)
 if solveMIP:
@@ -135,7 +93,7 @@ if solveMIP:
     plt.xlabel('distance (m)')
     plt.ylabel('speed (m/s)^2')
 
-    simulator.next_step()  # t = m+1
+    model.simulator.next_step()  # t = m+1
 
     # Find lower left corner
     #       p4 ----- p3
@@ -144,7 +102,7 @@ if solveMIP:
     #       p1 ----- p2
     #
     theta = model.theta
-    if simulator.singleFacet:
+    if model.simulator.singleFacet:
         b0 = -100
         b1 = -600
         b2 = model.b[0].x
@@ -163,7 +121,7 @@ if solveMIP:
     polygon = Polygon([p1, p2, p3, p4], alpha=0.4)
     ax = plt.gca()
     ax.add_patch(polygon)
-    ax.set_xlim([simulator.l_min, simulator.l_max])
+    ax.set_xlim([model.simulator.l_min, model.simulator.l_max])
     ax.set_ylim([floor(np.min(prnd_model.x[:, 1])),
                 ceil(np.max(prnd_model.x[:, 1]))])
 
@@ -180,7 +138,7 @@ if solveMIP:
 
 #  Figure 1
 # The evolution of the samples over 6 time steps
-gradient = 0.5*simulator.M/prnd_model.F_list
+gradient = 0.5*model.simulator.M/prnd_model.F_list
 
 fig1 = plt.figure(figsize=(5, 5))
 for index in range(1, 7):
@@ -227,7 +185,7 @@ for index in range(1, 7):
                 alpha=0.5, c='g')  # Plot samples with f=0
 
     #  Set Axis limits
-    ax.set_xlim([simulator.l_min, simulator.l_max])
+    ax.set_xlim([model.simulator.l_min, model.simulator.l_max])
     ax.set_ylim([floor(np.min(prnd_model.x[:, 1])),
                 ceil(np.max(prnd_model.x[:, 1]))])
 
