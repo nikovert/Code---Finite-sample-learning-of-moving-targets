@@ -27,13 +27,8 @@ jobs:
           # list of changed files within `super-linter`
           fetch-depth: 0
       
-      ################################
-      # Run Linter against code base #
-      ################################
-      - name: Pylint action
-        uses: gabriel-milan/action-pylint@v1
-        with:
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}} # GitHub token
-          path: "./*.py" # Glob pattern for files to lint
-          fail: false # Fail the action if pylint errors are found
-          pr-message: false # Send a PR message if pylint errors are found
+  pylint:
+    runs-on: ubuntu-latest
+    name: "pylint"
+    steps:
+      - uses: davidslusser/actions_python_pylint@v1.0.0
