@@ -3,8 +3,8 @@
 [MESSAGES CONTROL]
 disable=C0103 # Ignore naming convention
 
-[MESSAGES CONTROL: hypothesis.py]
-disable = E1101
+; [MESSAGES CONTROL: hypothesis.py]
+; disable = E1101
 
-[REPORTS]
-output-format = colorized
+; [REPORTS]
+; output-format = colorized
