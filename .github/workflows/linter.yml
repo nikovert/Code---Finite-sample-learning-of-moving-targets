@@ -27,8 +27,6 @@ jobs:
           # list of changed files within `super-linter`
           fetch-depth: 0
       
-  pylint:
-    runs-on: ubuntu-latest
-    name: "pylint"
-    steps:
-      - uses: davidslusser/actions_python_pylint@v1.0.0
+      - name: Analysing the code with pylint
+        run: |
+          find . -name '*.py' -exec pylint {} \;
