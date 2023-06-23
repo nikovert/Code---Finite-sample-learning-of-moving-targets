@@ -32,7 +32,7 @@ a_high = 0.035
 # Model reduced to using _ samples.
 np.random.seed(19682802)
 
-full_run = False
+full_run = True
 if full_run:
     delta_ratio = 1-10**-6
     t = np.linspace(10**-6, 1-10**-6, 10000)
