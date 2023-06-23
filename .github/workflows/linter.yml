@@ -27,14 +27,13 @@ jobs:
           # list of changed files within `super-linter`
           fetch-depth: 0
       
-
       ################################
       # Run Linter against code base #
       ################################
-      - name: Lint Code Base
+      - name: Pylint action
         uses: gabriel-milan/action-pylint@v1
-        env:
-          VALIDATE_ALL_CODEBASE: false
-          # Change to 'master' if your main branch differs
-          DEFAULT_BRANCH: main
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}} # GitHub token
+          path: "./*.py" # Glob pattern for files to lint
+          fail: false # Fail the action if pylint errors are found
+          pr-message: false # Send a PR message if pylint errors are found
