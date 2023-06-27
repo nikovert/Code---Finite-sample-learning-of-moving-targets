@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from mip import OptimizationStatus
 # from dill import dump_session, load_session
-from hypothesis import Hypothesis, compute_required_samples
+from hypothesis import Hypothesis, compute_required_samples, prune_samples
 
 
 ##########################################################
@@ -20,7 +20,7 @@ from hypothesis import Hypothesis, compute_required_samples
 #    print(
 #        f"model has {model.num_cols} vars, {model.num_rows} constraints and {model.num_nz} nzs")
 
-np.random.seed(19682802)
+np.random.seed(19681800)
 
 full_run = True
 if full_run:
@@ -29,10 +29,11 @@ else:
     sample_count = 500
 
 print(f"Estimated to need {sample_count} samples")
-model = Hypothesis()  # Generate empty Hypothesis with a simulator attached
-model.generateMsampleModel(sample_count, reduce=True)
 
-solveMIP = True
+solveMIP = False
+model = Hypothesis()  # Generate empty Hypothesis with a simulator attached
+model.generateMsampleModel(sample_count, reduce=True, addMILP=solveMIP)
+
 if solveMIP:
     status = model.optimize(max_nodes=2000)
     model.write('model_archive/model.lp')
@@ -53,9 +54,9 @@ if solveMIP:
             violation_points.append(model.x[i])
 
 prune_dist = 0.014
-prnd_model = model.prune(prune_dist)
+prnd_model = model.prune_model(prune_dist)
 
-m = len(prnd_model.f)
+prnd_m = len(prnd_model.f)
 if solveMIP:
     prnd_violation_points = []
     for p in violation_points:
@@ -107,7 +108,7 @@ if solveMIP:
 
     # Draw extended Facet p1--p4
     ax.axline(p1, p4, lw=2, color='r')
-    for i in range(m):
+    for i in range(prnd_m):
         if not any(np.all(prnd_model.x[i] == elem) for elem in prnd_violation_points):
             if prnd_model.f[i]:
                 plt.scatter(
@@ -118,7 +119,8 @@ if solveMIP:
 
 #  Figure 1
 # The evolution of the samples over 6 time steps
-gradient = 0.5*model.simulator.M/prnd_model.F_list
+gradient = 0.5*model.simulator.M/model.F_list
+m = len(model.f)
 
 fig1 = plt.figure(figsize=(5, 5))
 for index in range(1, 7):
@@ -140,10 +142,15 @@ for index in range(1, 7):
                   lw=2, alpha=0.5*sub_index/index)
 
         prev_upper = floor((sub_index-1) * m/6)
-        t_samples = prnd_model.x[prev_upper +
-                                 np.argwhere(prnd_model.f[prev_upper:sub_upper])[:, 0], :]
-        f_samples = prnd_model.x[prev_upper +
-                                 np.argwhere(prnd_model.f[prev_upper:sub_upper] < 1)[:, 0], :]
+
+        t_samples = model.x[prev_upper +
+                            np.argwhere(model.f[prev_upper:sub_upper])[:, 0], :]
+        f_samples = model.x[prev_upper +
+                            np.argwhere(model.f[prev_upper:sub_upper] < 1)[:, 0], :]
+
+        t_samples = prune_samples(t_samples, prune_dist*2)
+        f_samples = prune_samples(f_samples, prune_dist*2)
+
         plt.scatter(t_samples[:, 0], t_samples[:, 1], marker='^',
                     c='b', alpha=0.1*sub_index/index)  # Plot samples with f=1
         plt.scatter(f_samples[:, 0], f_samples[:, 1],
@@ -155,10 +162,14 @@ for index in range(1, 7):
 
     #  Extract 1-0 labeled samples
     prev_upper = floor((index-1) * m/6)
-    t_samples = prnd_model.x[prev_upper +
-                             np.argwhere(prnd_model.f[prev_upper:upper] > 0)[:, 0], :]
-    f_samples = prnd_model.x[prev_upper +
-                             np.argwhere(prnd_model.f[prev_upper:upper] < 1)[:, 0], :]
+    t_samples = model.x[prev_upper +
+                        np.argwhere(model.f[prev_upper:upper] > 0)[:, 0], :]
+    f_samples = model.x[prev_upper +
+                        np.argwhere(model.f[prev_upper:upper] < 1)[:, 0], :]
+
+    t_samples = prune_samples(t_samples, prune_dist*2)
+    f_samples = prune_samples(f_samples, prune_dist*2)
+
     plt.scatter(t_samples[:, 0], t_samples[:, 1], marker='^',
                 alpha=0.5, c='b')  # Plot samples with f=1
     plt.scatter(f_samples[:, 0], f_samples[:, 1], marker='o',
@@ -166,8 +177,8 @@ for index in range(1, 7):
 
     #  Set Axis limits
     ax.set_xlim([model.simulator.l_min, model.simulator.l_max])
-    ax.set_ylim([floor(np.min(prnd_model.x[:, 1])),
-                ceil(np.max(prnd_model.x[:, 1]))])
+    ax.set_ylim([floor(np.min(model.x[:, 1])),
+                ceil(np.max(model.x[:, 1]))])
 
 plt.subplots_adjust(hspace=0.3)
 

@@ -2,11 +2,13 @@ from math import atan, floor, ceil
 import numpy as np
 from mip import Model, minimize, xsum, BINARY, CONTINUOUS
 from numpy import linalg as LA
-from scipy.stats import norm
 from aeb import AEB
 
 """
-    Main results from paper: Hypothesis class for hypothesis generation and compute_required_samples function to find m
+    Main results from paper: 
+        - Hypothesis class for hypothesis generation 
+        - compute_required_samples function to find m
+        - prune sample before plotting
 """
 
 
@@ -34,6 +36,48 @@ def compute_required_samples(eps=0.01, delta=10**-4, a_high=0.035, vc_dim=1):
     ind = np.unravel_index(np.argmin(condition, axis=None), condition.shape)
     sample_count = ceil((m_min[ind] + m_max[ind])/2)
     return sample_count
+
+def prune_samples(x, distance):
+    """
+    Prunes the samples by removing samples within a certain distance from each other.
+
+    Args:
+        x (ndarray): The input samples.
+        distance (float): The distance threshold for pruning.
+
+    Returns:
+        ndarray: The pruned samples.
+
+    Note:
+        This function modifies the input samples `x` in-place to remove samples that are
+        within the specified distance from each other. It returns the modified samples.
+    """
+
+    # Normalising constants
+    cx = ceil(np.max(x[:, 0])) - \
+        floor(np.min(x[:, 0]))
+    cy = ceil(np.max(x[:, 1])) - \
+        floor(np.min(x[:, 1]))
+    c = np.array([cx, cy])
+
+    check = x.shape[0]-1
+    index_list = np.random.permutation(x.shape[0])
+
+    while check > 0:
+        #  Get all elments close to the indexed sample
+        index = index_list[check]
+        reference_point = x[index, :]
+        elements = np.argwhere(
+            LA.norm((reference_point-x)/c, axis=1) < distance)[1:]
+
+        #  Prune elements
+        if elements.shape[0] > 0:
+            x = np.delete(x, elements, 0)
+            index_list = np.random.permutation(x.shape[0])
+            check = min(check, x.shape[0]-1)
+        else:
+            check -= 1
+    return x
 
 
 class Hypothesis(Model):
@@ -95,38 +139,40 @@ class Hypothesis(Model):
         # Optionally copy any additional attributes or state
         return new_instance
 
-    def prune(self, distance):
+    def prune_model(self, distance):
         """
         Prunes the model by removing samples within a certain distance from each other.
 
         Args:
             distance (float): The distance threshold for pruning.
-            copy_model (bool, optional): Flag indicating whether to create a copy of the model before pruning.
-                                         Defaults to True.
 
         Returns:
             Hypothesis: The pruned model.
+
+        Note:
+            This method creates a pruned copy of the current Hypothesis model by removing samples
+            that are within the specified distance from each other. The pruning is performed based
+            on the samples `x` and their corresponding labels/target values `f`.
+
         """
         prnd_model = self.copy()
 
         # Normalising constants
-        cx = self.simulator.l_max - self.simulator.l_min
+        cx = ceil(np.max(prnd_model.x[:, 0])) - \
+            floor(np.min(prnd_model.x[:, 0]))
         cy = ceil(np.max(prnd_model.x[:, 1])) - \
             floor(np.min(prnd_model.x[:, 1]))
         c = np.array([cx, cy])
 
         check = self.x.shape[0]-1
+        index_list = np.random.permutation(self.x.shape[0])
         discard_list = np.zeros(self.x.shape)
         discard_list[self.discard_indices] = 1
-        index_list = np.random.permutation(self.x.shape[0])
 
         while check > 0:
             #  Get all elments close to the indexed sample
             index = index_list[check]
-            if check > prnd_model.x.shape[0]-1:
-                reference_point, f = prnd_model.simulator.genSamples()
-            else:
-                reference_point = prnd_model.x[index, :]
+            reference_point = self.x[index, :]
             elements = np.argwhere(
                 LA.norm((reference_point-prnd_model.x)/c, axis=1) < distance)[1:]
 
@@ -136,22 +182,9 @@ class Hypothesis(Model):
                 prnd_model.f = np.delete(prnd_model.f, elements, 0)
                 discard_list = np.delete(discard_list, elements, 0)
                 prnd_model.F_list = np.delete(prnd_model.F_list, elements, 0)
-                index_list = np.random.permutation(prnd_model.x.shape[0])
-                check = min(check, prnd_model.x.shape[0]-1)
-            else:
-                check -= 1
+            check -= 1
 
         prnd_model.discard_indices = np.argwhere(discard_list[:, 0])[:, 0]
-
-        # Fit a Gaussian distribution to the samples
-        mu, std = norm.fit(self.x[:, 1])
-        if abs(self.simulator.mu_vsqr - mu)/mu > 0.01 or abs(self.simulator.std_vsqr - std)/std > 0.1:
-            print("Warning, distribution doesn't match before pruning")
-
-        # Fit a Gaussian distribution to the samples
-        mu, std = norm.fit(prnd_model.x[:, 1])
-        if abs(prnd_model.simulator.mu_vsqr - mu)/mu > 0.01 or abs(prnd_model.simulator.std_vsqr - std)/std > 0.1:
-            print("Warning, distribution doesn't match after pruning")
 
         return prnd_model
 
@@ -236,7 +269,7 @@ class Hypothesis(Model):
         m = f.shape[0]
         return theta, a, discard_indices, eps, Nf, m, M
 
-    def build_model(self, x, f, reduce=True):
+    def build_model(self, x, f, reduce=True, addMILP=True):
         """Build the MIP optimization self for the AEB system.
 
         Args:
@@ -251,6 +284,20 @@ class Hypothesis(Model):
 
         theta, a, discard_indices, eps, Nf, m, M = self.preprocess_samples(
             x, f, reduce)
+
+        print(f"Discarded {len(discard_indices)} samples.")
+        print(f"Discarded {(len(discard_indices)/len(x))} %% of samples.")
+
+        self.x = x
+        self.f = f
+        self.discard_indices = discard_indices
+        self.a = a
+        self.theta = theta
+        self.F_list = self.simulator.F_list
+
+        if not addMILP:
+            return
+
         v = {i: self.add_var(var_type=BINARY, name=f"v_{i}")
              for i in range(m)}
         b = {j: self.add_var(var_type=CONTINUOUS, lb=-M,
@@ -306,23 +353,13 @@ class Hypothesis(Model):
                 m)) + volume_weight * xsum(width[j] for j in range(floor(Nf/2))))
             self.width = width
 
-        print(f"Discarded {len(discard_indices)} samples.")
-        print(f"Discarded {(len(discard_indices)/len(x))} %% of samples.")
-
         # Save values to self
-        self.x = x
-        self.f = f
-        self.discard_indices = discard_indices
-        self.F_list = self.simulator.F_list
-
         self.v = v
-        self.a = a
         self.b = b
         self.z = z
         self.s = s
-        self.theta = theta
 
-    def generateMsampleModel(self, m, dt=1, reduce=True):
+    def generateMsampleModel(self, m, dt=1, reduce=True, addMILP=True):
         """Generate an M-sample self for the AEB system using the MIP optimization.
 
         Args:
@@ -335,4 +372,4 @@ class Hypothesis(Model):
 
         """
         (x, f) = self.simulator.genSamples(dt=dt, m=m)
-        self.build_model(x, f, reduce=reduce)
+        self.build_model(x, f, reduce=reduce, addMILP=addMILP)
