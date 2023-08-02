@@ -10,7 +10,7 @@ sample_count = compute_required_samples()
 print(f"Starting with {sample_count} samples")
 
 K = 100
-a_list = []
+mu_list = []
 repeat = True
 while repeat:
     # Generate initial Map
@@ -28,23 +28,25 @@ while repeat:
     disagreements = np.sum(simulator.safety_label(
         x[:, 0, :m], x[:, 1, :m]) != f[:, :m], axis=0)
     mu = np.sum(disagreements)/K
-    a = mu/m
+    mu_bar = mu/m
     print(f"Calculated mu = {mu}")
-    print(f"Calculated a = {a}")
 
-    a_list.append(a)
-    a_high = 1.01*a
+    mu_list.append(mu_bar)
+    mu_high = 1.01*mu_bar
+    mu_low  = 0.99*mu_bar
+    print(f"Calculated mu_high = {mu_high}")
+    print(f"Calculated mu_low = {mu_low}")
 
     # Calculate the number of samples needed
-    sample_count = compute_required_samples(a_high=a_high)
+    sample_count = compute_required_samples(mu_high=mu_high, mu_low=mu_low)
 
     print(f"Estimated to need {sample_count} samples")
     if (sample_count <= m) and (0.9*m <= sample_count):
         repeat = False
         print("Done")
 
-# Plot evolution of 'a'
-plt.plot(a_list)
+# Plot evolution of 'mu_bar'
+plt.plot(mu_list)
 plt.show()
 
 ##### Outcome ######

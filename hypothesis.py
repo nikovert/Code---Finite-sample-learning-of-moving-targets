@@ -12,7 +12,7 @@ from aeb import AEB
 """
 
 
-def compute_required_samples(eps=0.01, delta=10**-4, a_high=0.035, vc_dim=1):
+def compute_required_samples(eps=0.01, delta=10**-4, mu_high=0.010, mu_low=0.009, vc_dim=1):
     """
     Compute the required number of samples for a hypothesis test.
 
@@ -25,16 +25,10 @@ def compute_required_samples(eps=0.01, delta=10**-4, a_high=0.035, vc_dim=1):
     Returns:
         int: The required number of samples for the hypothesis test.
     """
-    delta_ratio = 1-10**-6
-    t = np.linspace(10**-6, 1-10**-6, 10000)
+    m_min_1 = 5*(4*mu_high+ eps)/eps**2 * (np.log(8/delta) + vc_dim * np.log(40*(4*mu_high+ eps)/eps**2))
+    m_min_2 = 1/(2 * mu_low**2) * np.log(2/delta)
 
-    m_min = 5*(2*(a_high+t) + eps)/eps**2 * (-np.log((delta_ratio *
-                                                      delta)/4) + vc_dim * np.log(40*(2*(a_high+t) + eps)/eps**2))
-    m_max = -1/(2 * t**2) * np.log(((1-delta_ratio)*delta))
-
-    condition = abs(m_min - m_max+1)
-    ind = np.unravel_index(np.argmin(condition, axis=None), condition.shape)
-    sample_count = ceil((m_min[ind] + m_max[ind])/2)
+    sample_count = ceil(max(m_min_1, m_min_2))
     return sample_count
 
 def prune_samples(x, distance):
