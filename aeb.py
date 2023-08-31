@@ -5,8 +5,9 @@ import numpy as np
 class AEB:
     """Class for AEB (Automatic Emergency Braking) system."""
     braking_force = 2000  # braking force in N for p=100%
+    expected_loss = 1.0-3*10**-7
     M = 900  # mass of the vehicle in kg
-    l_min = 6
+    l_min = 40
     l_max = 120
     vsqr_min = (0.27777778 * 5) ** 2  # (5 km/h)^2
     vsqr_max = (0.27777778 * 160) ** 2  # (160 km/h)^2
@@ -32,28 +33,32 @@ class AEB:
         """Reset the brake performance to 100%."""
         self._p = 1
 
-    def next_step(self, dt=1):
+    def next_step(self, gamma=1):
         """Calculate the brake performance for the next time step."""
-        mult_loss = min(1.00, random.gauss(mu=1.0-10**-7, sigma=10**-6))
-        self._p = self._p*mult_loss*dt
+        #mult_loss = min(1.00, random.gauss(mu=self.expected_loss, sigma=10**-6))
+        mult_loss = random.gauss(mu=gamma*self.expected_loss, sigma=10**-6)
+        self._p = self._p*mult_loss
 
     def safety_label(self, l, vsqr):
         """Calculate the safety label for a distance l in meters and speed v in km/h."""
         F = self.measure_F()
         return 0.5*vsqr * self.M/F < l
 
-    def genSamples(self, dt=1, m=1, noStep=False):
+    def genSamples(self, m=1, T=100000, noStep=False):
         """Generate samples for the AEB system.
 
         Args:
-            dt (int, optional): Time step for sample generation. Defaults to 1.
             m (int, optional): Number of samples to generate. Defaults to 1.
+            T (int, optional): Time horizon for sample generation. Defaults to 100.000.
             noStep (bool, optional): Flag indicating whether to skip step calculations.
 
         Returns:
             tuple: A tuple containing the input samples and labels.
 
         """
+        delta = T - m
+        gamma = self.expected_loss**(-delta/m)
+
         l = np.random.uniform(low=self.l_min, high=self.l_max, size=m)
         vsqr = np.minimum(np.maximum(np.random.normal(
             self.mu_vsqr, self.std_vsqr, size=m), self.vsqr_min), self.vsqr_max)
@@ -61,7 +66,7 @@ class AEB:
         self.F_list = np.zeros(m)  # Log true braking force (for reference)
         for i in range(m):
             if not noStep:
-                self.next_step(dt)
+                self.next_step(gamma=gamma)
             self.F_list[i] = self.F
             #  Generate label
             f[i] = self.safety_label(l[i], vsqr[i])

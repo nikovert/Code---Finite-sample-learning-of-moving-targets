@@ -26,11 +26,11 @@ full_run = True
 if full_run:
     sample_count = compute_required_samples()
 else:
-    sample_count = 500
+    sample_count = 110000
 
 print(f"Estimated to need {sample_count} samples")
 
-solveMIP = False
+solveMIP = True
 model = Hypothesis()  # Generate empty Hypothesis with a simulator attached
 model.generateMsampleModel(sample_count, reduce=True, addMILP=solveMIP)
 
@@ -54,7 +54,7 @@ if solveMIP:
             violation_points.append(model.x[i])
 
 prune_dist = 0.014
-prnd_model = model.prune_model(prune_dist)
+prnd_model = model.prune_model(prune_dist*2)
 
 prnd_m = len(prnd_model.f)
 if solveMIP:
@@ -102,9 +102,9 @@ if solveMIP:
     polygon = Polygon([p1, p2, p3, p4], alpha=0.4)
     ax = plt.gca()
     ax.add_patch(polygon)
-    ax.set_xlim([model.simulator.l_min, model.simulator.l_max])
+    ax.set_xlim([model.simulator.l_min, model.simulator.l_max+20])
     ax.set_ylim([floor(np.min(prnd_model.x[:, 1])),
-                ceil(np.max(prnd_model.x[:, 1]))])
+                    ceil(np.max(prnd_model.x[:, 1]))])
 
     # Draw extended Facet p1--p4
     ax.axline(p1, p4, lw=2, color='r')

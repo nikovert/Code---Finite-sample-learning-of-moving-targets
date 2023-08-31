@@ -12,14 +12,15 @@ from aeb import AEB
 """
 
 
-def compute_required_samples(eps=0.01, delta=10**-4, mu_high=0.010, mu_low=0.009, vc_dim=1):
+def compute_required_samples(eps=0.01, delta=10**-6, mu_high=0.0163, mu_low=0.0086, vc_dim=1):
     """
     Compute the required number of samples for a hypothesis test.
 
     Args:
         eps (float): The desired precision. The default value is 0.01.
         delta (float): The desired maximum error probability. The default value is 10**-4.
-        a_high (float): The upper bound on the empirical error of the hypothesis. The default value is 0.035.
+        mu_high (float): The upper bound on the empirical error of the hypothesis. The default value is 1.63%.
+        mu_low (float): The lower bound on the empirical error of the hypothesis. The default value is 0.86%.
         vc_dim (int): The VC dimension of the hypothesis class. The default value is 1.
 
     Returns:
@@ -86,7 +87,7 @@ class Hypothesis(Model):
     def __init__(self, singleFacet=True):
         super().__init__()
         self.singleFacet = singleFacet
-        self.simulator = AEB()
+        self.simulator = AEB(singleFacet=singleFacet)
 
         # Save values to self
         self.x = []
@@ -280,7 +281,7 @@ class Hypothesis(Model):
             x, f, reduce)
 
         print(f"Discarded {len(discard_indices)} samples.")
-        print(f"Discarded {(len(discard_indices)/len(x))} %% of samples.")
+        print(f"Discarded {(len(discard_indices)/len(x)*100)} % of samples.")
 
         self.x = x
         self.f = f
@@ -353,17 +354,18 @@ class Hypothesis(Model):
         self.z = z
         self.s = s
 
-    def generateMsampleModel(self, m, dt=1, reduce=True, addMILP=True):
+    def generateMsampleModel(self, m, T=100000, reduce=True, addMILP=True):
         """Generate an M-sample self for the AEB system using the MIP optimization.
 
         Args:
             m (int): Number of samples to generate.
-            dt (int, optional): Time step for sample generation. Defaults to 1.
+            T (int, optional): Time horizon for sample generation. Defaults to 100.000.
             reduce (bool, optional): Flag indicating whether to reduce samples. Defaults to True.
-
+            addMILP (bool, optional): Specifies if a MILP model should be created
         Returns:
             Model: The generated M-sample self.
 
         """
-        (x, f) = self.simulator.genSamples(dt=dt, m=m)
+        (x, f) = self.simulator.genSamples(m=m, T=T)
+        print(f"Final braking force: {self.simulator.F}")
         self.build_model(x, f, reduce=reduce, addMILP=addMILP)

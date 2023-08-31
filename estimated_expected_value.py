@@ -5,7 +5,8 @@ from hypothesis import compute_required_samples
 
 # This script runs a basic monte carlo simulation to estimate the expected value of probability of the disagreement between f_i and f_m+1
 
-sample_count = compute_required_samples()
+T = 100000 # Time horizon
+sample_count = T
 
 print(f"Starting with {sample_count} samples")
 
@@ -17,12 +18,14 @@ while repeat:
     simulator = AEB()
     mu = 0
     m = int(sample_count)
+    delta = T - m
+    gamma = simulator.expected_loss**(-delta/m)
     f = np.zeros((K, m))
     x = np.zeros((K, 2, m))
     # Draw K samples for each timestep 0->m
     for i in range(m):
         (x[:, :, i], f[:, i]) = simulator.genSamples(m=K, noStep=True)
-        simulator.next_step()
+        simulator.next_step(gamma=gamma)
 
     # Compute the disagreement between the safety labels at the original timestep and m+1
     disagreements = np.sum(simulator.safety_label(
@@ -32,8 +35,8 @@ while repeat:
     print(f"Calculated mu = {mu}")
 
     mu_list.append(mu_bar)
-    mu_high = 1.01*mu_bar
-    mu_low  = 0.99*mu_bar
+    mu_high = np.ceil(mu)/m
+    mu_low  = np.floor(mu)/m
     print(f"Calculated mu_high = {mu_high}")
     print(f"Calculated mu_low = {mu_low}")
 
