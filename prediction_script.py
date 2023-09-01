@@ -26,7 +26,7 @@ full_run = True
 if full_run:
     sample_count = compute_required_samples()
 else:
-    sample_count = 110000
+    sample_count = 1000
 
 print(f"Estimated to need {sample_count} samples")
 
@@ -53,19 +53,21 @@ if solveMIP:
         if not model.v[i].x:
             violation_points.append(model.x[i])
 
-prune_dist = 0.014
-prnd_model = model.prune_model(prune_dist*2)
-
+prune_dist = 0.03
+prnd_model = model.prune_model(prune_dist)
 prnd_m = len(prnd_model.f)
+
 if solveMIP:
     prnd_violation_points = []
     for p in violation_points:
-        if p in prnd_model.x:
+        if p in model.x:
             prnd_violation_points.append(p)
 
     fig0 = plt.figure(figsize=(5, 5))
-    t_samples = prnd_model.x[np.argwhere(prnd_model.f)[:, 0]]
-    f_samples = prnd_model.x[np.argwhere(prnd_model.f < 1)[:, 0]]
+    t_samples = model.x[np.argwhere(model.f)[:, 0]]
+    f_samples = model.x[np.argwhere(model.f < 1)[:, 0]]
+    t_samples = prune_samples(t_samples, prune_dist)
+    f_samples = prune_samples(f_samples, prune_dist)
     plt.scatter(t_samples[:, 0], t_samples[:, 1],
                 marker='^', alpha=0.3)  # Plot samples with f=1
     plt.scatter(f_samples[:, 0], f_samples[:, 1],
@@ -103,8 +105,8 @@ if solveMIP:
     ax = plt.gca()
     ax.add_patch(polygon)
     ax.set_xlim([model.simulator.l_min, model.simulator.l_max+20])
-    ax.set_ylim([floor(np.min(prnd_model.x[:, 1])),
-                    ceil(np.max(prnd_model.x[:, 1]))])
+    ax.set_ylim([floor(np.min(model.x[:, 1])),
+                    ceil(np.max(model.x[:, 1]))])
 
     # Draw extended Facet p1--p4
     ax.axline(p1, p4, lw=2, color='r')
@@ -148,8 +150,8 @@ for index in range(1, 7):
         f_samples = model.x[prev_upper +
                             np.argwhere(model.f[prev_upper:sub_upper] < 1)[:, 0], :]
 
-        t_samples = prune_samples(t_samples, prune_dist*2)
-        f_samples = prune_samples(f_samples, prune_dist*2)
+        t_samples = prune_samples(t_samples, prune_dist)
+        f_samples = prune_samples(f_samples, prune_dist)
 
         plt.scatter(t_samples[:, 0], t_samples[:, 1], marker='^',
                     c='b', alpha=0.1*sub_index/index)  # Plot samples with f=1
@@ -182,35 +184,30 @@ for index in range(1, 7):
 
 plt.subplots_adjust(hspace=0.3)
 
-#  Figure 2
-# # Prune lists
-# figure, axes = plt.subplots()
-# plt.scatter(prnd_model.x[:,0], prnd_model.x[:,1], c='b', alpha = 0.8, edgecolors = None)
-# plt.scatter(prnd_model.x[:,0], prnd_model.x[:,1], c='b', alpha = 0.8, edgecolors = 'red')
-
-# for index in range(0,prnd_model.x.shape[0]):
-#     cirlces = plt.Circle(prnd_model.x[index,:], prune_dist, color='g', fill = False, clip_on=True)
-#     axes.add_artist(cirlces)
-# axes.set_aspect(0.22)
-
 # Extract discarded samples
 fig2 = plt.figure(figsize=(5, 5))
 
 # Plot all samples
-t_samples = prnd_model.x[np.argwhere(prnd_model.f > 0)[:, 0], :]
-f_samples = prnd_model.x[np.argwhere(prnd_model.f < 1)[:, 0], :]
+t_samples = model.x[np.argwhere(model.f > 0)[:, 0], :]
+f_samples = model.x[np.argwhere(model.f < 1)[:, 0], :]
+t_samples = prune_samples(t_samples, prune_dist)
+f_samples = prune_samples(f_samples, prune_dist)
 plt.scatter(t_samples[:, 0], t_samples[:, 1], marker='^',
             alpha=0.1, c='b')  # Plot samples with f=1
 plt.scatter(f_samples[:, 0], f_samples[:, 1], marker='o',
             alpha=0.1, c='g')  # Plot samples with f=0
 
 #  Highlight discarded samples
-for i in prnd_model.discard_indices:
-    if prnd_model.f[i] > 0:
-        plt.scatter(prnd_model.x[i, 0], prnd_model.x[i, 1], marker='^',
+for i in model.discard_indices:
+    if model.f[i] > 0:
+        if model.x[i, :] not in t_samples:
+            continue
+        plt.scatter(model.x[i, 0], model.x[i, 1], marker='^',
                     alpha=0.4, c='b', edgecolors='red')  # Plot discarded samples
     else:
-        plt.scatter(prnd_model.x[i, 0], prnd_model.x[i, 1], marker='o',
+        if model.x[i, :] not in f_samples:
+            continue
+        plt.scatter(model.x[i, 0], model.x[i, 1], marker='o',
                     alpha=0.4, c='g', edgecolors='red')  # Plot discarded samples
 plt.xlabel('distance (m)')
 plt.ylabel('speed (m/s)^2')
