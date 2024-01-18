@@ -12,25 +12,29 @@ from aeb import AEB
 """
 
 
-def compute_required_samples(eps=0.01, delta=10**-6, mu_high=0.0163, mu_low=0.0086, vc_dim=1):
+def compute_required_samples(eps=0.01, delta=10**-6, mu_high=0.02, mu_low=0.0078, vc_dim=1):
     """
     Compute the required number of samples for a hypothesis test.
 
     Args:
         eps (float): The desired precision. The default value is 0.01.
         delta (float): The desired maximum error probability. The default value is 10**-4.
-        mu_high (float): The upper bound on the empirical error of the hypothesis. The default value is 1.63%.
+        mu_high (float): The upper bound on the empirical error of the hypothesis. The default value is 2%.
         mu_low (float): The lower bound on the empirical error of the hypothesis. The default value is 0.86%.
         vc_dim (int): The VC dimension of the hypothesis class. The default value is 1.
 
     Returns:
         int: The required number of samples for the hypothesis test.
     """
-    m_min_1 = 5*(4*mu_high+ eps)/eps**2 * (np.log(8/delta) + vc_dim * np.log(40*(4*mu_high+ eps)/eps**2))
+    # Compute m_min_1 and m_min_2 based on the paper results
+    m_min_1 = 5*(4*mu_high + eps)/eps**2 * (np.log(8/delta) +
+                                            vc_dim * np.log(40*(4*mu_high + eps)/eps**2))
     m_min_2 = 1/(2 * mu_low**2) * np.log(2/delta)
 
+    # Calculate the sample_count as the maximum of m_min_1 and m_min_2
     sample_count = ceil(max(m_min_1, m_min_2))
     return sample_count
+
 
 def prune_samples(x, distance):
     """
@@ -48,18 +52,16 @@ def prune_samples(x, distance):
         within the specified distance from each other. It returns the modified samples.
     """
 
-    # Normalising constants
-    cx = ceil(np.max(x[:, 0])) - \
-        floor(np.min(x[:, 0]))
-    cy = ceil(np.max(x[:, 1])) - \
-        floor(np.min(x[:, 1]))
+    # Calculate normalizing constants
+    cx = ceil(np.max(x[:, 0])) - floor(np.min(x[:, 0]))
+    cy = ceil(np.max(x[:, 1])) - floor(np.min(x[:, 1]))
     c = np.array([cx, cy])
 
     check = x.shape[0]-1
     index_list = np.random.permutation(x.shape[0])
 
     while check > 0:
-        #  Get all elments close to the indexed sample
+        #  Get all elements close to the indexed sample
         index = index_list[check]
         reference_point = x[index, :]
         elements = np.argwhere(
@@ -89,7 +91,7 @@ class Hypothesis(Model):
         self.singleFacet = singleFacet
         self.simulator = AEB(singleFacet=singleFacet)
 
-        # Save values to self
+        # Initialize various attributes
         self.x = []
         self.f = []
         self.discard_indices = []
@@ -114,7 +116,7 @@ class Hypothesis(Model):
         new_instance = super().copy(solver_name)
         new_instance.__class__ = Hypothesis
 
-        # Save values to self
+        # Copy various attributes and state
         new_instance.singleFacet = self.singleFacet
         new_instance.simulator = self.simulator
         new_instance.x = self.x
@@ -131,57 +133,7 @@ class Hypothesis(Model):
 
         new_instance.width = self.width
 
-        # Optionally copy any additional attributes or state
         return new_instance
-
-    def prune_model(self, distance):
-        """
-        Prunes the model by removing samples within a certain distance from each other.
-
-        Args:
-            distance (float): The distance threshold for pruning.
-
-        Returns:
-            Hypothesis: The pruned model.
-
-        Note:
-            This method creates a pruned copy of the current Hypothesis model by removing samples
-            that are within the specified distance from each other. The pruning is performed based
-            on the samples `x` and their corresponding labels/target values `f`.
-
-        """
-        prnd_model = self.copy()
-
-        # Normalising constants
-        cx = ceil(np.max(prnd_model.x[:, 0])) - \
-            floor(np.min(prnd_model.x[:, 0]))
-        cy = ceil(np.max(prnd_model.x[:, 1])) - \
-            floor(np.min(prnd_model.x[:, 1]))
-        c = np.array([cx, cy])
-
-        check = self.x.shape[0]-1
-        index_list = np.random.permutation(self.x.shape[0])
-        discard_list = np.zeros(self.x.shape)
-        discard_list[self.discard_indices] = 1
-
-        while check > 0:
-            #  Get all elments close to the indexed sample
-            index = index_list[check]
-            reference_point = self.x[index, :]
-            elements = np.argwhere(
-                LA.norm((reference_point-prnd_model.x)/c, axis=1) < distance)[1:]
-
-            #  Prune elements
-            if elements.shape[0] > 0:
-                prnd_model.x = np.delete(prnd_model.x, elements, 0)
-                prnd_model.f = np.delete(prnd_model.f, elements, 0)
-                discard_list = np.delete(discard_list, elements, 0)
-                prnd_model.F_list = np.delete(prnd_model.F_list, elements, 0)
-            check -= 1
-
-        prnd_model.discard_indices = np.argwhere(discard_list[:, 0])[:, 0]
-
-        return prnd_model
 
     def discard_samples(self, samples, label, theta):
         """Discard samples that are irrelevant for the MIP optimization.
@@ -369,3 +321,18 @@ class Hypothesis(Model):
         (x, f) = self.simulator.genSamples(m=m, T=T)
         print(f"Final braking force: {self.simulator.F}")
         self.build_model(x, f, reduce=reduce, addMILP=addMILP)
+
+    def hypothesis_label(self, x):
+        """Calculate the hypothesis label for a distance l in meters 
+            and speed squared v in (m/s)^2."""
+        a = self.a
+        Nf = 1 if self.singleFacet else len(x[0]) * 2
+        h = np.zeros(x.shape[0])
+        for i in range(x.shape[0]):
+            if self.singleFacet:
+                h[i] = np.matmul(a[2], x[i]) + self.b[0].x <= 0
+            else:
+                h[i] = any([np.matmul(a[j], x[i]) +
+                           self.b[j].x <= 0 for j in range(Nf)])
+
+        return h

@@ -4,5 +4,7 @@
 *.lp
 .DS_Store
 *pkl
-Figures/TestSamples/*
+*Figures/*
 .vscode/*
+*jpeg
+*.png

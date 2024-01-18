@@ -3,9 +3,10 @@ import numpy as np
 from aeb import AEB
 from hypothesis import compute_required_samples
 
-# This script runs a basic monte carlo simulation to estimate the expected value of probability of the disagreement between f_i and f_m+1
+# This script runs a basic monte carlo simulation to estimate the expected value
+# of the disagreement between f_i and f_m+1
 
-T = 100000 # Time horizon
+T = 100000  # Time horizon
 sample_count = T
 
 print(f"Starting with {sample_count} samples")
@@ -36,7 +37,7 @@ while repeat:
 
     mu_list.append(mu_bar)
     mu_high = np.ceil(mu)/m
-    mu_low  = np.floor(mu)/m
+    mu_low = np.floor(mu)/m
     print(f"Calculated mu_high = {mu_high}")
     print(f"Calculated mu_low = {mu_low}")
 

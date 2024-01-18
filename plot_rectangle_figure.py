@@ -36,11 +36,11 @@ for i in range(len(model.f)):
         violation_points.append(model.x[i])
 
 # Visualize the results using matplotlib
-fig0 = plt.figure(figsize=(5, 5))
+fig0 = plt.figure(figsize=(7, 5))
 
 # Set labels for the plot
-plt.xlabel('distance (m)')
-plt.ylabel('speed (m/s)^2')
+plt.xlabel(r'$l [m]$', fontsize=15)
+plt.ylabel(r'$v^2 [(m/s)^2]$', fontsize=15)
 
 # Calculate polygon corners based on model parameters
 #       p4 ----- p3
@@ -66,34 +66,35 @@ ax = plt.gca()
 ax.add_patch(polygon)
 
 # Set plot limits
-ax.set_xlim([floor(min(polygon.xy[:,0])), ceil(max(polygon.xy[:,0]))])
-ax.set_ylim([floor(min(polygon.xy[:,1]))-10, ceil(max(polygon.xy[:,1]))+10])
+ax.set_xlim([floor(min(polygon.xy[:, 0])), ceil(max(polygon.xy[:, 0]))])
+ax.set_ylim([floor(min(polygon.xy[:, 1]))-10, ceil(max(polygon.xy[:, 1]))+10])
 
 # Annotate polygon facets
 for j in range(4):
     p = (polygon.xy[j]+polygon.xy[j+1])/2+1
     text = str(j)
-    if j==0:
+    if j == 0:
         text = str(4)
-        p[1] -=9
-    if j==2:
-        p[1] -=2
-    if j==3:
-        p[0] -=3
-    ax.annotate(text, xy=p, xycoords='data', xytext=(2, 2), textcoords='offset points')
+        p[1] -= 9
+    if j == 2:
+        p[1] -= 2
+    if j == 3:
+        p[0] -= 3
+    ax.annotate(text, xy=p, xycoords='data', xytext=(
+        2, 2), textcoords='offset points')
 
 # Draw extended Facet p1--p4
 ax.axline(p1, p4, lw=2, color='r')
 
 # Plot a circle
-angle = np.linspace(np.pi/2+theta, np.pi/2, 100)  # 0 <= θ <= 2π
-r =  30 #circle radius
-x1 = min(polygon.xy[:,0])  + r * np.cos(angle)
-x2 = min(polygon.xy[:,0])*tan(np.pi/2+theta) + r * np.sin(angle)
+angle = np.linspace(np.pi/2+theta-0.02, np.pi/2, 100)  # 0 <= θ <= 2π
+r = 30  # circle radius
+x1 = min(polygon.xy[:, 0]) + r * np.cos(angle)
+x2 = min(polygon.xy[:, 0])*tan(np.pi/2+theta) + r * np.sin(angle)
 plt.plot(x1, x2, color='green')
 
 # Annotate the angle
-ax.annotate(r'$\theta$', xy=[68, 323], xycoords='data', usetex=True)
+ax.annotate(r'$\theta$', xy=[71, 335], xycoords='data', usetex=True)
 
 # Display the plot
 plt.show()
